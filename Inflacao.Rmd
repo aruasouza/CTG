@@ -1,0 +1,296 @@
+---
+title: "Inflacao"
+output: html_document
+date: '2022-11-21'
+---
+
+```{r setup, include=FALSE}
+library(dplyr)
+library(forecast)
+library(FinTS)
+library(tseries)
+library(ggplot2)
+library(tidyverse)
+library(plotly)
+library(hrbrthemes)
+library(skimr)
+library(rio)
+library(rugarch)
+library(knitr)
+library(AICcmodavg)
+library(tsfgrnn)
+library(scales)
+library(rbcb)
+library(Quandl)
+library(dygraphs)
+library(quantmod)
+library(magrittr)
+library(PerformanceAnalytics)
+library(BETS)
+library(gt)
+library(dplyr)
+library(lubridate)
+library(scales)
+knitr::opts_chunk$set(echo = TRUE, output.lines=12)
+
+```
+
+## Pegando dados de expectativa de inflação
+
+```{r cars}
+
+expipca = get_twelve_months_inflation_expectations('IPCA')
+
+
+ggplot(expipca, aes(date, mean))+
+geom_line()+
+scale_x_date(breaks = date_breaks("1 years"),
+labels = date_format("%Y"))+
+xlab('')+ylab('%')+
+labs(title='Expectativas de Inflação 12 meses à frente',
+subtitle='Boletim FOCUS - Banco Central',
+caption='Fonte: analisemacro.com.br')
+```
+
+## Including Plots
+
+```{r}
+list = BETSsearch()
+# Pegar o IPCA
+IPCA = BETSget(10764, from = "2010-01-01", data.frame = TRUE, frequency = NULL)
+
+
+```
+```{r}
+IPCA <- rbcb::get_series(c(IPCA = 433),
+                         start_date = "2003-01-01",
+                         end_date = Sys.Date()-1,
+                         as = "ts")
+
+autoplot(IPCA)
+```
+```{r}
+autoplot(decompose(IPCA, type = "additive"))
+```
+
+
+```{r}
+adf.test(diff(IPCA))
+adf.test(IPCA)
+```
+
+
+```{r}
+dfts_est<-diff(IPCA)
+plot(dfts_est)
+adf.test(dfts_est)
+```
+
+#
+
+```{r}
+acf(dfts_est, ci.type='ma', main=" ACF  Série estacionária")
+
+pacf(dfts_est,  main="PACF Série estacionária")
+
+```
+
+```{r}
+Arrival.Forecasts = HoltWinters(IPCA,beta = TRUE, 
+gamma = TRUE)
+
+plot(Arrival.Forecasts)
+```
+
+
+```{r}
+HW1 <- HoltWinters(IPCA)
+
+# HOLT customizado
+HW2 <- HoltWinters(IPCA, alpha=0.1, beta=0.2, gamma=0.2, seasonal = c("additive"))
+
+plot(IPCA, ylab="Preço Algodão", xlim=c(2017,2023))
+lines(HW1$fitted[,1], lty=2, col="blue")
+lines(HW2$fitted[,1], lty=2, col="red")
+
+
+```
+```{r}
+HW1_for <- forecast(HW1, h=24, level=c(80,95))
+#visualize our predictions:
+plot(HW1_for, xlim=c(2017,2023))
+lines(HW1_for$fitted, lty=2, col="purple")
+```
+
+```{r}
+par(mfrow=c(1,2))
+acf(HW1_for$residuals, 
+    lag.max=20, 
+    na.action=na.pass)
+hist(HW1_for$residuals)
+Box.test(HW1_for$residuals, 
+         lag=20, 
+         type="Ljung-Box")
+
+
+```
+
+
+```{r}
+
+accuracy(HW1_for)
+```
+
+## Modelo ARIMA 
+
+
+```{r}
+par(mfrow=c(1,1))
+
+fit <- auto.arima(IPCA, max.q = 7,ic="bic", stationary = FALSE, trace = TRUE)
+summary(fit)
+
+fore <- forecast(fit, h = 30)
+
+plot(fore)
+
+
+```
+```{r}
+
+par(mfrow=c(1,2))
+acf(fore$residuals)
+
+
+qqnorm(fore$residuals)
+qqline(fore$residuals)
+Box.test(fore$residuals,type = "Ljung-Box", lag = 2)
+
+hist(fore$residuals)
+accuracy(fore)
+
+```
+
+## Previsão com TBATS
+
+```{r}
+model <- tbats(IPCA)
+
+TBATS_1<-forecast(model,h=30)
+plot(forecast(model,h=30))
+```
+
+
+#### Análise dos resíduos
+
+```{r}
+hist(model$errors)
+```
+
+```{r}
+accuracy(model)
+```
+
+
+```{r}
+par(mfrow=c(1,2))
+acf(TBATS_1$residuals)
+
+qqnorm(TBATS_1$residuals)
+qqline(TBATS_1$residuals)
+Box.test(TBATS_1$residuals,type = "Ljung-Box", lag = 2)
+
+```
+
+#### Modelo Garch
+
+Podemos começar com o modelo GARCH padrão, onde consideramos que o termo de erro condicional é uma distribuição normal. Usamos a função ugarchspec() para a especificação do modelo e ugarchfit() para o ajuste do modelo.
+
+```{r}
+
+mod_specify<-ugarchspec(
+           variance.model=list(model="sGARCH",
+                               garchOrder=c(1,1)),
+           mean.model=list(armaOrder=c(1,1)), 
+           distribution.model="norm")
+m.1 <- ugarchfit(data = IPCA, spec = mod_specify, out.sample = 20, solver = 'hybrid')
+
+
+```
+
+```{r}
+m.1
+plot(m.1 , which="all")
+```
+
+
+```{r}
+
+
+forc <- ugarchforecast(m.1 , data = bitcoin, n.ahead = 30, n.roll =10)
+plot(forc, which = 1)
+```
+
+```{r}
+model_garch2<-ugarchspec(variance.model = list(model = "sGARCH", garchOrder = c(2, 1)), 
+                  mean.model = list(armaOrder = c(1, 1), include.mean = TRUE), 
+                  distribution.model = "sstd")
+                  
+m.2<-ugarchfit(spec=model_garch2,data=IPCA, out.sample = 10, solver = "hybrid")
+m.2
+
+```
+
+```{r,out.width = 800, out.height=800}
+plot(m.2, which="all")
+```
+
+```{r}
+forc = ugarchforecast(m.2, data = bitcoin, n.ahead = 30, n.roll =10)
+```
+
+```{r, out.width=800}
+plot(forc, which = 1)
+plot(forc, which = 2)
+plot(forc, which = 3)
+```
+
+
+### Rede Neural
+
+```{r rede neural, cache=TRUE}
+
+pred <- grnn_forecasting(IPCA, h = 30)
+pred$prediction
+
+```
+
+```{r, results='hide'}
+# grnn_weights(pred)
+# Caso precise ver os pesos
+```
+
+```{r}
+summary(pred)
+```
+```{r}
+plot_example(pred, 30)
+```
+
+
+```{r, results='hold'}
+ro <- rolling_origin(pred, h = 30)
+#print(ro$test_sets)
+#print(ro$predictions)
+#print(ro$errors)
+```
+
+
+```{r}
+pred$prediction
+ro$h_accu
+```
+
+```{r}
+plot(ro)
+```
