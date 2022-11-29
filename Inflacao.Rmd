@@ -226,6 +226,7 @@ plot(m.1 , which="all")
 
 ```{r}
 
+
 forc <- ugarchforecast(m.1 , data = bitcoin, n.ahead = 30, n.roll =10)
 plot(forc, which = 1)
 ```
