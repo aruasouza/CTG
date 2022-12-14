@@ -1,0 +1,6 @@
+pandas
+numpy
+python-bcb
+fredapi
+sklearn
+darts
