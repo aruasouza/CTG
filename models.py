@@ -10,13 +10,19 @@ from scipy.optimize import curve_fit
 from darts import TimeSeries
 from darts.models import BlockRNNModel
 from darts.dataprocessing.transformers import Scaler
+import logging
 
-today = datetime.now()
-logfile_name = f'log_{today.month}_{today.year}.csv'
-try:
-    pd.read_csv(logfile_name)
-except FileNotFoundError:
-    pd.DataFrame({'time':[],'output':[],'error':[]}).to_csv(logfile_name,index = False)
+# Criando sistema de log
+logging.info('Logging is working')
+logging.basicConfig(filename='modelos.log', level=logging.DEBUG,
+                    format='%(asctime)s %(levelname)s %(name)s %(message)s', encoding="utf-8")
+
+logging.debug('This message is a test')
+logging.warning("If you see this message the warnning system is working")
+
+# Chave para a FRED API
+api_key = '5beeb88b7a5cdd7d4fd8b976e138b52e'
+fred = Fred(api_key = api_key)
 
 # Função que converte a variação mensal do IPCA em IPCA absoluto (A série de ipca deve começar em janeiro de 2000)
 def absolute(serie):
@@ -30,7 +36,11 @@ def absolute(serie):
 # Função que puxa as séries temporais usadas pra prever o IPCA
 def get_indicators_ipca(start_date):
     dados = {'selic':432,'emprego':28763,'producao':21859,'comercio':1455,'energia':1406,'IPCA_change':433}
-    dataframe = sgs.get(dados,start = start_date)
+    try:
+        dataframe = sgs.get(dados,start = start_date)
+    except (ValueError,TimeoutError,EOFError):
+        print ("Um erro de conexão ocorreu")
+        pass
     dataframe = dataframe.resample('m').mean()
     dataframe['indice'] = [valor for valor in absolute(dataframe['IPCA_change'].values)]
     del(dataframe['IPCA_change'])
@@ -49,7 +59,11 @@ def get_indicators_cambio(start_date):
     api_key = '5beeb88b7a5cdd7d4fd8b976e138b52e'
     fred = Fred(api_key = api_key)
     dados = {'selic':432,'emprego':28763,'ipca':13522,'pib':1208}
-    dataframe = sgs.get(dados,start = start_date)
+    try:
+        dataframe = sgs.get(dados,start = start_date)
+    except (ValueError,TimeoutError,EOFError):
+        print ("Um erro de conexão ocorreu")
+        pass
     cy = currency.get('USD', start = start_date,end = str(date.today()))
     dataframe['cambio'] = cy['USD']
     gdp_eua = fred.get_series(series_id = 'GDPC1',observation_start = start_date)
@@ -67,7 +81,11 @@ def get_indicators_cambio(start_date):
 
 def get_indicators_selic(start_date):
     dados = {'selic':432,'IPCA_change':433,'pib':1208}
-    dataframe = sgs.get(dados,start = start_date)
+    try:
+        dataframe = sgs.get(dados,start = start_date)
+    except (ValueError,TimeoutError,EOFError):
+        print ("Um erro de conexão ocorreu")
+        pass
     dataframe = dataframe.fillna(method = 'ffill')
     dataframe = dataframe.resample('m').mean()
     dataframe['indice'] = [valor for valor in absolute(dataframe['IPCA_change'].values)]
@@ -129,122 +147,129 @@ class RegressionPlusLSTM:
         return self
 
     def predict(self,n,peso):
-        self.peso = peso
-        trend_prediction = np.array([self.func(x,*self.popt) for x in range(self.x0,self.x0 + n)])
-        secondary_prediction = self.lstm.predict(n)
-        prediction_final = (trend_prediction * self.peso) + (secondary_prediction * (1 - self.peso))
-        # Ajustes finais
-        last_year_mean = self.values[-12:].mean()
-        diferenca = last_year_mean - prediction_final[0]
-        prediction_final = prediction_final + diferenca
-        micro_diferenca = self.values[-1] - prediction_final[0]
-        prediction_final = np.array([prediction_final[i] + (micro_diferenca * (1 - (i / (len(prediction_final) - 1)))) for i in range(len(prediction_final))])
+        try:
+            self.peso = peso
+            trend_prediction = np.array([self.func(x,*self.popt) for x in range(self.x0,self.x0 + n)])
+            secondary_prediction = self.lstm.predict(n)
+            prediction_final = (trend_prediction * self.peso) + (secondary_prediction * (1 - self.peso))
+            # Ajustes finais
+            last_year_mean = self.values[-12:].mean()
+            diferenca = last_year_mean - prediction_final[0]
+            prediction_final = prediction_final + diferenca
+            micro_diferenca = self.values[-1] - prediction_final[0]
+            prediction_final = np.array([prediction_final[i] + (micro_diferenca * (1 - (i / (len(prediction_final) - 1)))) for i in range(len(prediction_final))])
+        except(ValueError):
+            print('Error de valor')
+            logging.warning('Error de valor')
+            pass
         return prediction_final
 
 # Função que prevê o IPCA
 def predict_ipca():
+    log = pd.read_csv('log.csv')
+    # Obtendo os dados
     try:
-        # Obtendo os dados
         df = get_indicators_ipca('2000-01-01')
-        ipca = df[['indice']].copy()
-        df = df.drop(['indice'],axis = 1)
-        # Treinando o modelo de IPCA
-        anos = 5
-        x_train,y_train = train_test_split(df,ipca,anos)
-        model = LSTM(y_train,x_train).fit(24,12 * anos)
-        # Calculando o Erro
-        prediction = model.predict(12 * anos)
-        pred_df = ipca.copy()
-        pred_df['prediction'] = [None for _ in range(len(pred_df) - len(prediction))] + list(prediction)
-        pred_df['res'] = ((pred_df['indice'] - pred_df['prediction']) / pred_df['indice']).apply(abs)
-        pred = pred_df.dropna()
-        res_max = pred['res'].max()
-        # Treinando novamente o modelo e calculando o Forecast
-        model = LSTM(ipca,df).fit(24,12 * anos)
-        prediction = model.predict(12 * anos)
-        pred_df = pd.DataFrame({'prediction':prediction},
-            index = pd.period_range(start = ipca.index[-1] + relativedelta(months = 1),periods = len(prediction),freq = 'M'))
-        pred_df['superior'] = [pred + (pred * res_max) for pred in prediction]
-        pred_df['inferior'] = [pred - (pred * res_max) for pred in prediction]
-        # Salvando no Log
-        success('ipca',pred_df)
-        return pred_df
-    except Exception as e:
-        error(e)
-        return e
+    except(TimeoutError):
+        print('Sem conexão')
+        logging.debug('TimeoutError')
+        pass
+    ipca = df[['indice']].copy()
+    df = df.drop(['indice'],axis = 1)
+    # Treinando o modelo de IPCA
+    anos = 5
+    x_train,y_train = train_test_split(df,ipca,anos)
+    model = LSTM(y_train,x_train).fit(24,12 * anos)
+    # Calculando o Erro
+    prediction = model.predict(12 * anos)
+    pred_df = ipca.copy()
+    pred_df['prediction'] = [None for _ in range(len(pred_df) - len(prediction))] + list(prediction)
+    pred_df['res'] = ((pred_df['indice'] - pred_df['prediction']) / pred_df['indice']).apply(abs)
+    pred = pred_df.dropna()
+    res_max = pred['res'].max()
+    # Treinando novamente o modelo e calculando o Forecast
+    model = LSTM(ipca,df).fit(24,12 * anos)
+    prediction = model.predict(12 * anos)
+    pred_df = pd.DataFrame({'prediction':prediction},
+        index = pd.period_range(start = ipca.index[-1] + relativedelta(months = 1),periods = len(prediction),freq = 'M'))
+    pred_df['superior'] = [pred + (pred * res_max) for pred in prediction]
+    pred_df['inferior'] = [pred - (pred * res_max) for pred in prediction]
+    # Salvando no Log
+    pred_df['time'] = datetime.now()
+    pred_df['indicador'] = 'IPCA'
+    new_log = pd.concat([log,pred_df])
+    new_log.to_csv('log.csv',index = False)
+    return pred_df
 
 def predict_cambio():
-    try:
-        # Puxando os dados de câmbio
-        df = get_indicators_cambio('2000-01-01')
-        cambio = df[['cambio']].copy()
-        df = df.drop(['cambio'],axis = 1)
-        # Treinando o modelo de câmbio
-        anos = 5
-        x_train,y_train = train_test_split(df,cambio,anos)
-        model = RegressionPlusLSTM(y_train,x_train,simple_square).fit(36,12 * anos)
-        # Calculando o Erro
-        prediction = model.predict(12 * anos,0.6)
-        pred_df = cambio.copy()
-        pred_df['prediction'] = [None for _ in range(len(pred_df) - len(prediction))] + list(prediction)
-        pred_df['res'] = ((pred_df['cambio'] - pred_df['prediction']) / pred_df['cambio']).apply(abs)
-        pred = pred_df.dropna()
-        res_max = pred['res'].max()
-        # Treinando novamente o modelo e calculando o Forecast
-        model = RegressionPlusLSTM(cambio,df,simple_square).fit(36,12 * anos)
-        prediction = model.predict(12 * anos,0.6)
-        pred_df = pd.DataFrame({'prediction':prediction},
-            index = pd.period_range(start = cambio.index[-1] + relativedelta(months = 1),periods = len(prediction),freq = 'M'))
-        pred_df['superior'] = [pred + (pred * res_max) for pred in prediction]
-        pred_df['inferior'] = [pred - (pred * res_max) for pred in prediction]
-        # Salvando no Log
-        success('cambio',pred_df)
-        return pred_df
-    except Exception as e:
-        error(e)
-        return e
+    log = pd.read_csv('log.csv')
+    # Puxando os dados de câmbio
+    df = get_indicators_cambio('2000-01-01')
+    cambio = df[['cambio']].copy()
+    df = df.drop(['cambio'],axis = 1)
+    # Treinando o modelo de câmbio
+    anos = 5
+    x_train,y_train = train_test_split(df,cambio,anos)
+    model = RegressionPlusLSTM(y_train,x_train,simple_square).fit(36,12 * anos)
+    # Calculando o Erro
+    prediction = model.predict(12 * anos,0.6)
+    pred_df = cambio.copy()
+    pred_df['prediction'] = [None for _ in range(len(pred_df) - len(prediction))] + list(prediction)
+    pred_df['res'] = ((pred_df['cambio'] - pred_df['prediction']) / pred_df['cambio']).apply(abs)
+    pred = pred_df.dropna()
+    res_max = pred['res'].max()
+    # Treinando novamente o modelo e calculando o Forecast
+    model = RegressionPlusLSTM(cambio,df,simple_square).fit(36,12 * anos)
+    prediction = model.predict(12 * anos,0.6)
+    pred_df = pd.DataFrame({'prediction':prediction},
+        index = pd.period_range(start = cambio.index[-1] + relativedelta(months = 1),periods = len(prediction),freq = 'M'))
+    pred_df['superior'] = [pred + (pred * res_max) for pred in prediction]
+    pred_df['inferior'] = [pred - (pred * res_max) for pred in prediction]
+    # Salvando no Log
+    pred_df['time'] = datetime.now()
+    pred_df['indicador'] = 'Câmbio'
+    new_log = pd.concat([log,pred_df])
+    new_log.to_csv('log.csv',index = False)
+    return pred_df
 
 def predict_selic():
-    try:
-        # Puxando e plotando os dados de IPCA
-        df = get_indicators_selic('2000-01-01')
-        selic = df[['selic']].copy()
-        df = df.drop(['selic'],axis = 1)
-        # Treinando o modelo de SELIC
-        anos = 5
-        x_train,y_train = train_test_split(df,selic,anos)
-        model = RegressionPlusLSTM(y_train,x_train,square).fit(60,12 * anos)
-        # Calculando o Erro
-        prediction = model.predict(12 * anos,0.2)
-        pred_df = selic.copy()
-        pred_df['prediction'] = [None for _ in range(len(pred_df) - len(prediction))] + list(prediction)
-        pred_df['res'] = (pred_df['selic'] - pred_df['prediction']).apply(abs)
-        pred = pred_df.dropna()
-        res_max = pred['res'].max()
-        # Treinando novamente o modelo e calculando o Forecast
-        model = RegressionPlusLSTM(selic,df,square).fit(60,12 * anos)
-        prediction = model.predict(12 * anos,0.2)
-        pred_df = pd.DataFrame({'prediction':prediction},
-            index = pd.period_range(start = selic.index[-1] + relativedelta(months = 1),periods = len(prediction),freq = 'M'))
-        pred_df['superior'] = [pred + res_max for pred in prediction]
-        pred_df['inferior'] = [pred - res_max for pred in prediction]
-        # Salvando no Log
-        success('selic',pred_df)
-        return pred_df
-    except Exception as e:
-        error(e)
-        return e
+    log = pd.read_csv('log.csv')
+    # Puxando e plotando os dados de IPCA
+    df = get_indicators_selic('2000-01-01')
+    selic = df[['selic']].copy()
+    df = df.drop(['selic'],axis = 1)
+    # Treinando o modelo de SELIC
+    anos = 5
+    x_train,y_train = train_test_split(df,selic,anos)
+    model = RegressionPlusLSTM(y_train,x_train,square).fit(60,12 * anos)
+    # Calculando o Erro
+    prediction = model.predict(12 * anos,0.2)
+    pred_df = selic.copy()
+    pred_df['prediction'] = [None for _ in range(len(pred_df) - len(prediction))] + list(prediction)
+    pred_df['res'] = (pred_df['selic'] - pred_df['prediction']).apply(abs)
+    pred = pred_df.dropna()
+    res_max = pred['res'].max()
+    # Treinando novamente o modelo e calculando o Forecast
+    model = RegressionPlusLSTM(selic,df,square).fit(60,12 * anos)
+    prediction = model.predict(12 * anos,0.2)
+    pred_df = pd.DataFrame({'prediction':prediction},
+        index = pd.period_range(start = selic.index[-1] + relativedelta(months = 1),periods = len(prediction),freq = 'M'))
+    pred_df['superior'] = [pred + res_max for pred in prediction]
+    pred_df['inferior'] = [pred - res_max for pred in prediction]
+    # Salvando no Log
+    pred_df['time'] = datetime.now()
+    pred_df['indicador'] = 'SELIC'
+    new_log = pd.concat([log,pred_df])
+    new_log.to_csv('log.csv',index = False)
+    return pred_df
 
-def error(e):
-    log = pd.read_csv(logfile_name)
-    log = pd.concat([log,pd.DataFrame({'time':[datetime.now()],'output':['erro'],'error':[repr(e)]})])
-    log.to_csv(logfile_name,index = False)
+# Write log
+logging.error('error test')
+logging.debug('Debug test')
+logging.basicConfig(filename='modelos.log', filemode='w',level=logging.DEBUG)
 
-def success(name,output):
-    time = datetime.now()
-    time_str = str(time).replace('.','-').replace(':','-').replace(' ','-')
-    file_name = f'output/{name}_{time_str}.csv'
-    output.to_csv(file_name,index = False)
-    log = pd.read_csv(logfile_name)
-    log = pd.concat([log,pd.DataFrame({'time':[time],'output':[file_name],'error':['no errors']})])
-    log.to_csv(logfile_name,index = False)
+# Concatenando os logs
+# Falta escrever o arquivo de log e concatenar
+log_models=pd.read_csv('log.csv')
+#log_system=pd.read_csv('modelos.log', sep='\s\s+', engine='python')
+#log_system.to_csv('log_system.csv', index=None)
