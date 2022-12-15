@@ -10,7 +10,17 @@ from scipy.optimize import curve_fit
 from darts import TimeSeries
 from darts.models import BlockRNNModel
 from darts.dataprocessing.transformers import Scaler
+import logging
 
+# Criando sistema de log
+logging.info('Logging is working')
+logging.basicConfig(filename='modelos.log', level=logging.DEBUG,
+                    format='%(asctime)s %(levelname)s %(name)s %(message)s', encoding="utf-8")
+
+logging.debug('This message is a test')
+logging.warning("If you see this message the warnning system is working")
+
+# Chave para a FRED API
 api_key = '5beeb88b7a5cdd7d4fd8b976e138b52e'
 fred = Fred(api_key = api_key)
 
@@ -26,7 +36,11 @@ def absolute(serie):
 # Função que puxa as séries temporais usadas pra prever o IPCA
 def get_indicators_ipca(start_date):
     dados = {'selic':432,'emprego':28763,'producao':21859,'comercio':1455,'energia':1406,'IPCA_change':433}
-    dataframe = sgs.get(dados,start = start_date)
+    try:
+        dataframe = sgs.get(dados,start = start_date)
+    except (ValueError,TimeoutError,EOFError):
+        print ("Um erro de conexão ocorreu")
+        pass
     dataframe = dataframe.resample('m').mean()
     dataframe['indice'] = [valor for valor in absolute(dataframe['IPCA_change'].values)]
     del(dataframe['IPCA_change'])
@@ -43,7 +57,11 @@ def train_test_split(xdata,ydata,horizonte):
 # Função que puxa os dados usados pra prever o câmbio
 def get_indicators_cambio(start_date):
     dados = {'selic':432,'emprego':28763,'ipca':13522,'pib':1208}
-    dataframe = sgs.get(dados,start = start_date)
+    try:
+        dataframe = sgs.get(dados,start = start_date)
+    except (ValueError,TimeoutError,EOFError):
+        print ("Um erro de conexão ocorreu")
+        pass
     cy = currency.get('USD', start = start_date,end = str(date.today()))
     dataframe['cambio'] = cy['USD']
     gdp_eua = fred.get_series(series_id = 'GDPC1',observation_start = start_date)
@@ -61,7 +79,11 @@ def get_indicators_cambio(start_date):
 
 def get_indicators_selic(start_date):
     dados = {'selic':432,'IPCA_change':433,'pib':1208}
-    dataframe = sgs.get(dados,start = start_date)
+    try:
+        dataframe = sgs.get(dados,start = start_date)
+    except (ValueError,TimeoutError,EOFError):
+        print ("Um erro de conexão ocorreu")
+        pass
     dataframe = dataframe.fillna(method = 'ffill')
     dataframe = dataframe.resample('m').mean()
     dataframe['indice'] = [valor for valor in absolute(dataframe['IPCA_change'].values)]
@@ -123,23 +145,33 @@ class RegressionPlusLSTM:
         return self
 
     def predict(self,n,peso):
-        self.peso = peso
-        trend_prediction = np.array([self.func(x,*self.popt) for x in range(self.x0,self.x0 + n)])
-        secondary_prediction = self.lstm.predict(n)
-        prediction_final = (trend_prediction * self.peso) + (secondary_prediction * (1 - self.peso))
-        # Ajustes finais
-        last_year_mean = self.values[-12:].mean()
-        diferenca = last_year_mean - prediction_final[0]
-        prediction_final = prediction_final + diferenca
-        micro_diferenca = self.values[-1] - prediction_final[0]
-        prediction_final = np.array([prediction_final[i] + (micro_diferenca * (1 - (i / (len(prediction_final) - 1)))) for i in range(len(prediction_final))])
+        try:
+            self.peso = peso
+            trend_prediction = np.array([self.func(x,*self.popt) for x in range(self.x0,self.x0 + n)])
+            secondary_prediction = self.lstm.predict(n)
+            prediction_final = (trend_prediction * self.peso) + (secondary_prediction * (1 - self.peso))
+            # Ajustes finais
+            last_year_mean = self.values[-12:].mean()
+            diferenca = last_year_mean - prediction_final[0]
+            prediction_final = prediction_final + diferenca
+            micro_diferenca = self.values[-1] - prediction_final[0]
+            prediction_final = np.array([prediction_final[i] + (micro_diferenca * (1 - (i / (len(prediction_final) - 1)))) for i in range(len(prediction_final))])
+        except(ValueError):
+            print('Error de valor')
+            logging.warning('Error de valor')
+            pass
         return prediction_final
 
 # Função que prevê o IPCA
 def predict_ipca():
     log = pd.read_csv('log.csv')
     # Obtendo os dados
-    df = get_indicators_ipca('2000-01-01')
+    try:
+        df = get_indicators_ipca('2000-01-01')
+    except(TimeoutError):
+        print('Sem conexão')
+        logging.debug('TimeoutError')
+        pass
     ipca = df[['indice']].copy()
     df = df.drop(['indice'],axis = 1)
     # Treinando o modelo de IPCA
@@ -228,3 +260,14 @@ def predict_selic():
     new_log = pd.concat([log,pred_df])
     new_log.to_csv('log.csv',index = False)
     return pred_df
+
+# Write log
+logging.error('error test')
+logging.debug('Debug test')
+logging.basicConfig(filename='modelos.log', filemode='w',level=logging.DEBUG)
+
+# Concatenando os logs
+# Falta escrever o arquivo de log e concatenar
+log_models=pd.read_csv('log.csv')
+#log_system=pd.read_csv('modelos.log', sep='\s\s+', engine='python')
+#log_system.to_csv('log_system.csv', index=None)
