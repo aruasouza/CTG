@@ -11,13 +11,22 @@ from darts import TimeSeries
 from darts.models import BlockRNNModel
 from darts.dataprocessing.transformers import Scaler
 import logging
-
+import io 
 today = datetime.now()
 logfile_name = f'log_{today.month}_{today.year}.csv'
 try:
     pd.read_csv(logfile_name)
 except FileNotFoundError:
     pd.DataFrame({'time':[],'output':[],'error':[]}).to_csv(logfile_name,index = False)
+logging.debug('This message is a test')
+logging.warning("If you see this message the warnning system is working")
+
+# Função que devolve o error e concatena no arquivo de log
+def error(e):
+    log = pd.read_csv(logfile_name)
+    log = pd.concat([log,pd.DataFrame({'time':[datetime.now()],'output':['erro'],'error':[repr(e)]})])
+    log.to_csv(logfile_name,index = False)
+
 
 # Função que converte a variação mensal do IPCA em IPCA absoluto (A série de ipca deve começar em janeiro de 2000)
 def absolute(serie):
@@ -33,9 +42,9 @@ def get_indicators_ipca(start_date):
     dados = {'selic':432,'emprego':28763,'producao':21859,'comercio':1455,'energia':1406,'IPCA_change':433}
     try:
         dataframe = sgs.get(dados,start = start_date)
-    except (ValueError,TimeoutError,EOFError):
+    except Exception as e:
         print ("Um erro de conexão ocorreu")
-        pass
+        return e
     dataframe = dataframe.resample('m').mean()
     dataframe['indice'] = [valor for valor in absolute(dataframe['IPCA_change'].values)]
     del(dataframe['IPCA_change'])
@@ -56,9 +65,9 @@ def get_indicators_cambio(start_date):
     dados = {'selic':432,'emprego':28763,'ipca':13522,'pib':1208}
     try:
         dataframe = sgs.get(dados,start = start_date)
-    except (ValueError,TimeoutError,EOFError):
+    except Exception as e:
         print ("Um erro de conexão ocorreu")
-        pass
+        return e
     cy = currency.get('USD', start = start_date,end = str(date.today()))
     dataframe['cambio'] = cy['USD']
     gdp_eua = fred.get_series(series_id = 'GDPC1',observation_start = start_date)
@@ -78,9 +87,10 @@ def get_indicators_selic(start_date):
     dados = {'selic':432,'IPCA_change':433,'pib':1208}
     try:
         dataframe = sgs.get(dados,start = start_date)
-    except (ValueError,TimeoutError,EOFError):
-        print ("Um erro de conexão ocorreu")
-        pass
+    except Exception as e:
+        print (e)
+        error(e)
+        return e
     dataframe = dataframe.fillna(method = 'ffill')
     dataframe = dataframe.resample('m').mean()
     dataframe['indice'] = [valor for valor in absolute(dataframe['IPCA_change'].values)]
@@ -153,10 +163,9 @@ class RegressionPlusLSTM:
             prediction_final = prediction_final + diferenca
             micro_diferenca = self.values[-1] - prediction_final[0]
             prediction_final = np.array([prediction_final[i] + (micro_diferenca * (1 - (i / (len(prediction_final) - 1)))) for i in range(len(prediction_final))])
-        except(ValueError):
-            print('Error de valor')
-            logging.warning('Error de valor')
-            pass
+        except Exception as e:
+            error(e)
+            return e
         return prediction_final
 
 # Função que prevê o IPCA
@@ -253,10 +262,6 @@ def predict_selic():
         error(e)
         return e
 
-def error(e):
-    log = pd.read_csv(logfile_name)
-    log = pd.concat([log,pd.DataFrame({'time':[datetime.now()],'output':['erro'],'error':[repr(e)]})])
-    log.to_csv(logfile_name,index = False)
 
 def success(name,output):
     time = datetime.now()
