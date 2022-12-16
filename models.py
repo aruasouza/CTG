@@ -202,6 +202,8 @@ def predict_ipca():
             index = pd.period_range(start = ipca.index[-1] + relativedelta(months = 1),periods = len(prediction),freq = 'M'))
         pred_df['superior'] = [pred + (pred * res_max) for pred in prediction]
         pred_df['inferior'] = [pred - (pred * res_max) for pred in prediction]
+        std = pd.Series(list(ipca.indice.values) + list(pred_df.prediction.values)).rolling(12).std().values[-len(pred_df):]
+        pred_df['std'] = std
         # Salvando no Log
         success('ipca',pred_df)
         return pred_df
@@ -233,6 +235,8 @@ def predict_cambio():
             index = pd.period_range(start = cambio.index[-1] + relativedelta(months = 1),periods = len(prediction),freq = 'M'))
         pred_df['superior'] = [pred + (pred * res_max) for pred in prediction]
         pred_df['inferior'] = [pred - (pred * res_max) for pred in prediction]
+        std = pd.Series(list(cambio.cambio.values) + list(pred_df.prediction.values)).rolling(12).std().values[-len(pred_df):]
+        pred_df['std'] = std
         # Salvando no Log
         success('cambio',pred_df)
         return pred_df
@@ -264,6 +268,8 @@ def predict_selic():
             index = pd.period_range(start = selic.index[-1] + relativedelta(months = 1),periods = len(prediction),freq = 'M'))
         pred_df['superior'] = [pred + res_max for pred in prediction]
         pred_df['inferior'] = [pred - res_max for pred in prediction]
+        std = pd.Series(list(selic.selic.values) + list(pred_df.prediction.values)).rolling(12).std().values[-len(pred_df):]
+        pred_df['std'] = std
         # Salvando no Log
         success('selic',pred_df)
         return pred_df

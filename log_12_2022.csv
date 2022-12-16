@@ -3,3 +3,6 @@ time,output,error
 2022-12-16 09:16:38.339599,erro,"UnboundLocalError(""local variable 'fred' referenced before assignment"")"
 2022-12-16 09:29:30.281112,erro,"UnboundLocalError(""local variable 'fred' referenced before assignment"")"
 2022-12-16 09:32:42.954291,erro,TimeoutError('Erro de conexão com o Federal Reserve')
+2022-12-16 10:09:14.675939,cambio_2022-12-16-10-09-14-675939.csv,no errors
+2022-12-16 10:12:17.363071,selic_2022-12-16-10-12-17-363071.csv,no errors
+2022-12-16 10:20:54.662886,cambio_2022-12-16-10-20-54-662886.csv,no errors
