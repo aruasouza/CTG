@@ -11,7 +11,6 @@ from darts import TimeSeries
 from darts.models import BlockRNNModel
 from darts.dataprocessing.transformers import Scaler
 import logging
-import io
 
 today = datetime.now()
 logfile_name = f'log_{today.month}_{today.year}.csv'
