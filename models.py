@@ -12,6 +12,19 @@ from darts.models import BlockRNNModel
 from darts.dataprocessing.transformers import Scaler
 import logging
 
+import os, uuid, sys
+from azure.storage.filedatalake import DataLakeServiceClient
+
+clientId = "0ed95623-a6d8-473e-86a7-a01009d77232"
+clientKey = "NC~8Q~K~SRFfrd4yf9Ynk_YAaLwtxJST1k9S4b~O"
+
+try:
+    service_client = DataLakeServiceClient(account_url="{}://{}.dfs.core.windows.net".format(
+        "https", clientId), credential = clientKey)
+
+except Exception as e:
+    print(e)
+
 today = datetime.now()
 logfile_name = f'log_{today.month}_{today.year}.csv'
 try:
@@ -34,9 +47,22 @@ def success(name,output):
     file_name = f'{name}_{time_str}.csv'
     output.index.name = 'date'
     output.to_csv('output/' + file_name)
+    upload_file_to_directory(file_name,f'PrevisionData/Variables/{name}/AI')
     log = pd.read_csv(logfile_name)
     log = pd.concat([log,pd.DataFrame({'time':[time],'output':[file_name],'error':['no errors']})])
     log.to_csv(logfile_name,index = False)
+
+def upload_file_to_directory(file_name,directory):
+    try:
+        file_system_client = service_client.get_file_system_client(file_system='DatalakeRiscoECompliance')
+        directory_client = file_system_client.get_directory_client(directory)
+        file_client = directory_client.create_file(file_name)
+        local_file = open('output/' + file_name,'r')
+        file_contents = local_file.read()
+        file_client.append_data(data=file_contents, offset=0, length=len(file_contents))
+        file_client.flush_data(len(file_contents))
+    except Exception as e:
+      print(e)
 
 # Função que converte a variação mensal do IPCA em IPCA absoluto (A série de ipca deve começar em janeiro de 2000)
 def absolute(serie):
@@ -205,7 +231,7 @@ def predict_ipca():
         std = pd.Series(list(ipca.indice.values) + list(pred_df.prediction.values)).rolling(12).std().values[-len(pred_df):]
         pred_df['std'] = std
         # Salvando no Log
-        success('ipca',pred_df)
+        success('INFLACAO',pred_df)
         return pred_df
     except Exception as e:
         error(e)
@@ -238,7 +264,7 @@ def predict_cambio():
         std = pd.Series(list(cambio.cambio.values) + list(pred_df.prediction.values)).rolling(12).std().values[-len(pred_df):]
         pred_df['std'] = std
         # Salvando no Log
-        success('cambio',pred_df)
+        success('CAMBIO',pred_df)
         return pred_df
     except Exception as e:
         error(e)
@@ -271,7 +297,7 @@ def predict_selic():
         std = pd.Series(list(selic.selic.values) + list(pred_df.prediction.values)).rolling(12).std().values[-len(pred_df):]
         pred_df['std'] = std
         # Salvando no Log
-        success('selic',pred_df)
+        success('JUROS',pred_df)
         return pred_df
     except Exception as e:
         error(e)

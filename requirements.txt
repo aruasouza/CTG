@@ -4,3 +4,5 @@ python-bcb
 fredapi
 sklearn
 darts
+azure-storage-file-datalake
+azure-identity
