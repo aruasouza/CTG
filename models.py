@@ -32,7 +32,8 @@ def success(name,output):
     time = datetime.now()
     time_str = str(time).replace('.','-').replace(':','-').replace(' ','-')
     file_name = f'{name}_{time_str}.csv'
-    output.to_csv('output/' + file_name,index = False)
+    output.index.name = 'date'
+    output.to_csv('output/' + file_name)
     log = pd.read_csv(logfile_name)
     log = pd.concat([log,pd.DataFrame({'time':[time],'output':[file_name],'error':['no errors']})])
     log.to_csv(logfile_name,index = False)

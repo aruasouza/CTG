@@ -1,8 +1,6 @@
 time,output,error
-2022-12-15 10:01:06.087870,output/selic_2022-12-15-10-01-06-087870.csv,no errors
-2022-12-16 09:16:38.339599,erro,"UnboundLocalError(""local variable 'fred' referenced before assignment"")"
-2022-12-16 09:29:30.281112,erro,"UnboundLocalError(""local variable 'fred' referenced before assignment"")"
 2022-12-16 09:32:42.954291,erro,TimeoutError('Erro de conexão com o Federal Reserve')
-2022-12-16 10:09:14.675939,cambio_2022-12-16-10-09-14-675939.csv,no errors
-2022-12-16 10:12:17.363071,selic_2022-12-16-10-12-17-363071.csv,no errors
-2022-12-16 10:20:54.662886,cambio_2022-12-16-10-20-54-662886.csv,no errors
+2022-12-19 14:17:38.354891,erro,"AttributeError(""'DataFrame' object has no attribute 'Index'"")"
+2022-12-19 14:22:49.464627,cambio_2022-12-19-14-22-49-464627.csv,no errors
+2022-12-19 14:28:35.331563,selic_2022-12-19-14-28-35-331563.csv,no errors
+2022-12-19 14:31:33.694778,ipca_2022-12-19-14-31-33-694778.csv,no errors
