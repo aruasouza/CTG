@@ -12,18 +12,20 @@ from darts.models import BlockRNNModel
 from darts.dataprocessing.transformers import Scaler
 import logging
 
-import os, uuid, sys
-from azure.storage.filedatalake import DataLakeServiceClient
+from azure.datalake.store import core, lib, multithread
 
-clientId = "0ed95623-a6d8-473e-86a7-a01009d77232"
-clientKey = "NC~8Q~K~SRFfrd4yf9Ynk_YAaLwtxJST1k9S4b~O"
+tenant = '6e2475ac-18e8-4a6c-9ce5-20cace3064fc'
+RESOURCE = 'https://datalake.azure.net/'
+client_id = "0ed95623-a6d8-473e-86a7-a01009d77232"
+client_secret = "NC~8Q~K~SRFfrd4yf9Ynk_YAaLwtxJST1k9S4b~O"
+adlsAccountName = 'deepenctg'
 
-try:
-    service_client = DataLakeServiceClient(account_url="{}://{}.dfs.core.windows.net".format(
-        "https", clientId), credential = clientKey)
+adlCreds = lib.auth(tenant_id = tenant,
+                client_secret = client_secret,
+                client_id = client_id,
+                resource = RESOURCE)
 
-except Exception as e:
-    print(e)
+adlsFileSystemClient = core.AzureDLFileSystem(adlCreds, store_name=adlsAccountName)
 
 today = datetime.now()
 logfile_name = f'log_{today.month}_{today.year}.csv'
@@ -47,22 +49,14 @@ def success(name,output):
     file_name = f'{name}_{time_str}.csv'
     output.index.name = 'date'
     output.to_csv('output/' + file_name)
-    upload_file_to_directory(file_name,f'PrevisionData/Variables/{name}/AI')
+    upload_file_to_directory(file_name,f'DataLakeRiscoECompliance/PrevisionData/Variables/{name}/AI')
     log = pd.read_csv(logfile_name)
     log = pd.concat([log,pd.DataFrame({'time':[time],'output':[file_name],'error':['no errors']})])
     log.to_csv(logfile_name,index = False)
 
 def upload_file_to_directory(file_name,directory):
-    try:
-        file_system_client = service_client.get_file_system_client(file_system='DatalakeRiscoECompliance')
-        directory_client = file_system_client.get_directory_client(directory)
-        file_client = directory_client.create_file(file_name)
-        local_file = open('output/' + file_name,'r')
-        file_contents = local_file.read()
-        file_client.append_data(data=file_contents, offset=0, length=len(file_contents))
-        file_client.flush_data(len(file_contents))
-    except Exception as e:
-      print(e)
+    multithread.ADLUploader(adlsFileSystemClient, lpath='output/' + file_name,
+        rpath=f'{directory}/{file_name}', nthreads=64, overwrite=True, buffersize=4194304, blocksize=4194304)
 
 # Função que converte a variação mensal do IPCA em IPCA absoluto (A série de ipca deve começar em janeiro de 2000)
 def absolute(serie):

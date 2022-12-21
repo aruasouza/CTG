@@ -1,9 +1,9 @@
 # Dockerfile, Image, Container
-FROM python:3.9.15
+FROM python:3.9.13
 
 ADD models.py .
 
-RUN pip install sklearn statsmodels datetime fredapi bcb dateutil scipy darts pandas numpy
+RUN pip install sklearn statsmodels fredapi python-bcb scipy darts pandas numpy azure-mgmt-resource azure-mgmt-datalake-store azure-datalake-store
 
 CMD [ "python", "./models.py" ]
 
