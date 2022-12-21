@@ -29,10 +29,16 @@ adlsFileSystemClient = core.AzureDLFileSystem(adlCreds, store_name=adlsAccountNa
 
 today = datetime.now()
 logfile_name = f'log_{today.month}_{today.year}.csv'
+
 try:
-    pd.read_csv(logfile_name)
+    multithread.ADLDownloader(adlsFileSystemClient, lpath=logfile_name, 
+        rpath=f'DataLakeRiscoECompliance/LOG/{logfile_name}', nthreads=64, 
+        overwrite=True, buffersize=4194304, blocksize=4194304)
+
 except FileNotFoundError:
     pd.DataFrame({'time':[],'output':[],'error':[]}).to_csv(logfile_name,index = False)
+    multithread.ADLUploader(adlsFileSystemClient, lpath=logfile_name,
+        rpath=f'DataLakeRiscoECompliance/LOG/{logfile_name}', nthreads=64, overwrite=True, buffersize=4194304, blocksize=4194304)
 
 logging.debug('This message is a test')
 logging.warning("If you see this message the warnning system is working")
@@ -53,6 +59,8 @@ def success(name,output):
     log = pd.read_csv(logfile_name)
     log = pd.concat([log,pd.DataFrame({'time':[time],'output':[file_name],'error':['no errors']})])
     log.to_csv(logfile_name,index = False)
+    multithread.ADLUploader(adlsFileSystemClient, lpath=logfile_name,
+        rpath=f'DataLakeRiscoECompliance/LOG/{logfile_name}', nthreads=64, overwrite=True, buffersize=4194304, blocksize=4194304)
 
 def upload_file_to_directory(file_name,directory):
     multithread.ADLUploader(adlsFileSystemClient, lpath='output/' + file_name,

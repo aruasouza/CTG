@@ -1,8 +1,3 @@
 time,output,error
-2022-12-16 09:32:42.954291,erro,TimeoutError('Erro de conexão com o Federal Reserve')
-2022-12-19 14:17:38.354891,erro,"AttributeError(""'DataFrame' object has no attribute 'Index'"")"
-2022-12-19 14:22:49.464627,cambio_2022-12-19-14-22-49-464627.csv,no errors
-2022-12-19 14:28:35.331563,selic_2022-12-19-14-28-35-331563.csv,no errors
-2022-12-19 14:31:33.694778,ipca_2022-12-19-14-31-33-694778.csv,no errors
-2022-12-19 16:38:27.184580,INFLACAO_2022-12-19-16-38-27-184580.csv,no errors
-2022-12-21 09:06:06.494315,CAMBIO_2022-12-21-09-06-06-494315.csv,no errors
+2022-12-21 11:20:10.537432,erro,TimeoutError('Erro de conexão com o Banco Central')
+2022-12-21 11:22:01.753346,INFLACAO_2022-12-21-11-22-01-753346.csv,no errors
