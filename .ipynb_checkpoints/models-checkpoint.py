@@ -206,26 +206,20 @@ class RegressionPlusLSTM:
         return prediction_final
 
 # Função que prevê o IPCA
-def predict_ipca(test = None):
+def predict_ipca():
     try:
         # Obtendo os dados
         df = get_indicators_ipca('2000-01-01')
         ipca = df[['indice']].copy()
         df = df.drop(['indice'],axis = 1)
         # Treinando o modelo de IPCA
-        if test == None:
-            test = [5]
-        results = {}
-        for anos in test:
-            x_train,y_train = train_test_split(df,ipca,anos)
-            model = LSTM(y_train,x_train).fit(24,12 * anos)
-            # Calculando o Erro
-            prediction = model.predict(12 * anos)
-            pred_df = ipca.copy()
-            pred_df['prediction'] = [None for _ in range(len(pred_df) - len(prediction))] + list(prediction)
-            results[anos] = pred_df
-        if test != None:
-            return results
+        anos = 5
+        x_train,y_train = train_test_split(df,ipca,anos)
+        model = LSTM(y_train,x_train).fit(24,12 * anos)
+        # Calculando o Erro
+        prediction = model.predict(12 * anos)
+        pred_df = ipca.copy()
+        pred_df['prediction'] = [None for _ in range(len(pred_df) - len(prediction))] + list(prediction)
         pred_df['res'] = ((pred_df['indice'] - pred_df['prediction']) / pred_df['indice']).apply(abs)
         pred = pred_df.dropna()
         res_max = pred['res'].max()
@@ -245,26 +239,20 @@ def predict_ipca(test = None):
         error(e)
         return e
 
-def predict_cambio(test = None):
+def predict_cambio():
     try:
         # Puxando os dados de câmbio
         df = get_indicators_cambio('2000-01-01')
         cambio = df[['cambio']].copy()
         df = df.drop(['cambio'],axis = 1)
         # Treinando o modelo de câmbio
-        if test == None:
-            test = [5]
-        results = {}
-        for anos in test:
-            x_train,y_train = train_test_split(df,cambio,anos)
-            model = RegressionPlusLSTM(y_train,x_train,simple_square).fit(36,12 * anos)
-            # Calculando o Erro
-            prediction = model.predict(12 * anos,0.6)
-            pred_df = cambio.copy()
-            pred_df['prediction'] = [None for _ in range(len(pred_df) - len(prediction))] + list(prediction)
-            results[anos] = pred_df
-        if test != None:
-            return results
+        anos = 5
+        x_train,y_train = train_test_split(df,cambio,anos)
+        model = RegressionPlusLSTM(y_train,x_train,simple_square).fit(36,12 * anos)
+        # Calculando o Erro
+        prediction = model.predict(12 * anos,0.6)
+        pred_df = cambio.copy()
+        pred_df['prediction'] = [None for _ in range(len(pred_df) - len(prediction))] + list(prediction)
         pred_df['res'] = ((pred_df['cambio'] - pred_df['prediction']) / pred_df['cambio']).apply(abs)
         pred = pred_df.dropna()
         res_max = pred['res'].max()
@@ -284,26 +272,20 @@ def predict_cambio(test = None):
         error(e)
         return e
 
-def predict_selic(test = None):
+def predict_selic():
     try:
         # Puxando e plotando os dados de IPCA
         df = get_indicators_selic('2000-01-01')
         selic = df[['selic']].copy()
         df = df.drop(['selic'],axis = 1)
         # Treinando o modelo de SELIC
-        if test == None:
-            test = [5]
-        results = {}
-        for anos in test:
-            x_train,y_train = train_test_split(df,selic,anos)
-            model = RegressionPlusLSTM(y_train,x_train,square).fit(60,12 * anos)
-            # Calculando o Erro
-            prediction = model.predict(12 * anos,0.2)
-            pred_df = selic.copy()
-            pred_df['prediction'] = [None for _ in range(len(pred_df) - len(prediction))] + list(prediction)
-            results[anos] = pred_df
-        if test != None:
-            return results
+        anos = 5
+        x_train,y_train = train_test_split(df,selic,anos)
+        model = RegressionPlusLSTM(y_train,x_train,square).fit(60,12 * anos)
+        # Calculando o Erro
+        prediction = model.predict(12 * anos,0.2)
+        pred_df = selic.copy()
+        pred_df['prediction'] = [None for _ in range(len(pred_df) - len(prediction))] + list(prediction)
         pred_df['res'] = (pred_df['selic'] - pred_df['prediction']).apply(abs)
         pred = pred_df.dropna()
         res_max = pred['res'].max()
