@@ -189,20 +189,13 @@ class RegressionPlusLSTM:
         return self
 
     def predict(self,n,peso):
-        try:
-            self.peso = peso
-            trend_prediction = np.array([self.func(x,*self.popt) for x in range(self.x0,self.x0 + n)])
-            secondary_prediction = self.lstm.predict(n)
-            prediction_final = (trend_prediction * self.peso) + (secondary_prediction * (1 - self.peso))
-            # Ajustes finais
-            last_year_mean = self.values[-12:].mean()
-            diferenca = last_year_mean - prediction_final[0]
-            prediction_final = prediction_final + diferenca
-            micro_diferenca = self.values[-1] - prediction_final[0]
-            prediction_final = np.array([prediction_final[i] + (micro_diferenca * (1 - (i / (len(prediction_final) - 1)))) for i in range(len(prediction_final))])
-        except Exception as e:
-            error(e)
-            return e
+        self.peso = peso
+        trend_prediction = np.array([self.func(x,*self.popt) for x in range(self.x0,self.x0 + n)])
+        secondary_prediction = self.lstm.predict(n)
+        prediction_final = (trend_prediction * self.peso) + (secondary_prediction * (1 - self.peso))
+        # Ajustes finais
+        micro_diferenca = self.values[-1] - prediction_final[0]
+        prediction_final = np.array([prediction_final[i] + (micro_diferenca * (1 - (i / (len(prediction_final) - 1)))) for i in range(len(prediction_final))])
         return prediction_final
 
 # Função que prevê o IPCA
@@ -298,7 +291,7 @@ def predict_selic(test = False,lags = None):
             x_train,y_train = train_test_split(df,selic,anos)
             model = RegressionPlusLSTM(y_train,x_train,square).fit(60,12 * anos)
             # Calculando o Erro
-            prediction = model.predict(12 * anos,0.2)
+            prediction = model.predict(12 * anos,0.8)
             pred_df = selic.copy()
             pred_df['prediction'] = [None for _ in range(len(pred_df) - len(prediction))] + list(prediction)
             results[anos] = pred_df
