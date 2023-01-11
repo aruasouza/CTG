@@ -30,3 +30,13 @@ time,output,error
 2023-01-11 10:37:24.903985,CAMBIO_2023-01-11-10-37-24-903985.csv,no errors
 2023-01-11 10:38:21.090765,INFLACAO_2023-01-11-10-38-21-090765.csv,no errors
 2023-01-11 10:39:55.347811,JUROS_2023-01-11-10-39-55-347811.csv,no errors
+2023-01-11 13:13:34.904501,erro,"TypeError(""'NoneType' object is not iterable"")"
+2023-01-11 13:13:43.870297,erro,"TypeError(""'NoneType' object is not iterable"")"
+2023-01-11 13:13:45.666515,erro,"TypeError(""'NoneType' object is not iterable"")"
+2023-01-11 14:03:48.747622,INFLACAO_2023-01-11-14-03-48-747622.csv,no errors
+2023-01-11 14:26:33.199021,INFLACAO_2023-01-11-14-26-33-199021.csv,no errors
+2023-01-11 14:28:00.515075,JUROS_2023-01-11-14-28-00-515075.csv,no errors
+2023-01-11 14:28:03.789601,erro,TimeoutError('Erro de conexão com o Banco Central')
+2023-01-11 14:31:24.559487,INFLACAO_2023-01-11-14-31-24-559487.csv,no errors
+2023-01-11 14:32:55.174523,JUROS_2023-01-11-14-32-55-174523.csv,no errors
+2023-01-11 14:34:19.997639,CAMBIO_2023-01-11-14-34-19-997639.csv,no errors

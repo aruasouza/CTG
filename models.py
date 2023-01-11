@@ -3,7 +3,6 @@ import numpy as np
 from bcb import sgs,currency
 from fredapi import Fred
 from sklearn.metrics import mean_squared_error
-from statsmodels.tools.eval_measures import rmse
 from datetime import date,datetime
 from dateutil.relativedelta import relativedelta
 from scipy.optimize import curve_fit
@@ -11,6 +10,8 @@ from darts import TimeSeries
 from darts.models import BlockRNNModel
 from darts.dataprocessing.transformers import Scaler
 import logging
+import os
+import time
 
 from azure.datalake.store import core, lib, multithread
 
@@ -65,6 +66,8 @@ def success(name,output):
 def upload_file_to_directory(file_name,directory):
     multithread.ADLUploader(adlsFileSystemClient, lpath='output/' + file_name,
         rpath=f'{directory}/{file_name}', nthreads=64, overwrite=True, buffersize=4194304, blocksize=4194304)
+    time.sleep(1)
+    os.remove('output/' + file_name)
 
 # Função que converte a variação mensal do IPCA em IPCA absoluto (A série de ipca deve começar em janeiro de 2000)
 def absolute(serie):
@@ -221,6 +224,7 @@ def predict_ipca(test = False,lags = None):
             return results
         pred_df['res'] = ((pred_df['indice'] - pred_df['prediction']) / pred_df['indice']).apply(abs)
         pred = pred_df.dropna()
+        std = mean_squared_error(pred['indice'],pred['prediction'],squared = False)
         res_max = pred['res'].max()
         # Treinando novamente o modelo e calculando o Forecast
         model = LSTM(ipca,df).fit(24,12 * anos)
@@ -229,7 +233,6 @@ def predict_ipca(test = False,lags = None):
             index = pd.period_range(start = ipca.index[-1] + relativedelta(months = 1),periods = len(prediction),freq = 'M'))
         pred_df['superior'] = [pred + (pred * res_max) for pred in prediction]
         pred_df['inferior'] = [pred - (pred * res_max) for pred in prediction]
-        std = pd.Series(list(ipca.indice.values) + list(pred_df.prediction.values)).rolling(12).std().values[-len(pred_df):]
         pred_df['std'] = std
         # Salvando no Log
         success('INFLACAO',pred_df)
@@ -260,6 +263,7 @@ def predict_cambio(test = False,lags = None):
             return results
         pred_df['res'] = ((pred_df['cambio'] - pred_df['prediction']) / pred_df['cambio']).apply(abs)
         pred = pred_df.dropna()
+        std = mean_squared_error(pred['cambio'],pred['prediction'],squared = False)
         res_max = pred['res'].max()
         # Treinando novamente o modelo e calculando o Forecast
         model = RegressionPlusLSTM(cambio,df,simple_square).fit(36,12 * anos)
@@ -268,7 +272,6 @@ def predict_cambio(test = False,lags = None):
             index = pd.period_range(start = cambio.index[-1] + relativedelta(months = 1),periods = len(prediction),freq = 'M'))
         pred_df['superior'] = [pred + (pred * res_max) for pred in prediction]
         pred_df['inferior'] = [pred - (pred * res_max) for pred in prediction]
-        std = pd.Series(list(cambio.cambio.values) + list(pred_df.prediction.values)).rolling(12).std().values[-len(pred_df):]
         pred_df['std'] = std
         # Salvando no Log
         success('CAMBIO',pred_df)
@@ -299,6 +302,7 @@ def predict_selic(test = False,lags = None):
             return results
         pred_df['res'] = (pred_df['selic'] - pred_df['prediction']).apply(abs)
         pred = pred_df.dropna()
+        std = mean_squared_error(pred['selic'],pred['prediction'],squared = False)
         res_max = pred['res'].max()
         # Treinando novamente o modelo e calculando o Forecast
         model = RegressionPlusLSTM(selic,df,square).fit(60,12 * anos)
@@ -307,7 +311,6 @@ def predict_selic(test = False,lags = None):
             index = pd.period_range(start = selic.index[-1] + relativedelta(months = 1),periods = len(prediction),freq = 'M'))
         pred_df['superior'] = [pred + res_max for pred in prediction]
         pred_df['inferior'] = [pred - res_max for pred in prediction]
-        std = pd.Series(list(selic.selic.values) + list(pred_df.prediction.values)).rolling(12).std().values[-len(pred_df):]
         pred_df['std'] = std
         # Salvando no Log
         success('JUROS',pred_df)
