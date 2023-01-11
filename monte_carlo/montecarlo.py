@@ -1,23 +1,40 @@
 import numpy as np
 import pandas as pd
+import random
+from datetime import datetime
+from dateutil.relativedelta import relativedelta
+from azure.datalake.store import core, lib, multithread
 
-def distribution(media,minimo,maximo,n):
-    size = maximo - minimo
-    size += size * 0.1
-    dist = (np.random.rand(n) * size) + minimo
-    return list(map(lambda x: x + (np.random.normal(0.5,0.17) * (media - x)),dist))
+class NoLogError(Exception):
+    pass
 
-def gerar_cenarios(n,simulacao):
-    # IPCA
-    cenarios_ipca = distribution(simulacao.loc['medio','ipca'],simulacao.loc['min','ipca'],simulacao.loc['max','ipca'],n)
-    np.random.shuffle(cenarios_ipca)
-    # CDI
-    cenarios_cdi = distribution(simulacao.loc['medio','cdi'],simulacao.loc['min','cdi'],simulacao.loc['max','cdi'],n)
-    np.random.shuffle(cenarios_cdi)
-    # Cambio
-    cenarios_cambio = distribution(simulacao.loc['medio','cambio'],simulacao.loc['min','cambio'],simulacao.loc['max','cambio'],n)
-    np.random.shuffle(cenarios_cambio)
+tenant = '6e2475ac-18e8-4a6c-9ce5-20cace3064fc'
+RESOURCE = 'https://datalake.azure.net/'
+client_id = "0ed95623-a6d8-473e-86a7-a01009d77232"
+client_secret = "NC~8Q~K~SRFfrd4yf9Ynk_YAaLwtxJST1k9S4b~O"
+adlsAccountName = 'deepenctg'
 
-    # Resposta
-    return pd.DataFrame({'ipca':cenarios_ipca,'cdi':cenarios_cdi,'cambio':cenarios_cambio})
+adlCreds = lib.auth(tenant_id = tenant,
+                client_secret = client_secret,
+                client_id = client_id,
+                resource = RESOURCE)
 
+adlsFileSystemClient = core.AzureDLFileSystem(adlCreds, store_name=adlsAccountName)
+
+def get_log(mes,ano):
+    logfile_name = f'log_{mes}_{ano}.csv'
+    try:
+        multithread.ADLDownloader(adlsFileSystemClient, lpath=logfile_name, 
+        rpath=f'DataLakeRiscoECompliance/LOG/{logfile_name}', nthreads=64, 
+        overwrite=True, buffersize=4194304, blocksize=4194304)
+        log = pd.read_csv(logfile_name)
+        files_list = log.loc[log['error'] == 'no errors']
+    except FileNotFoundError:
+        raise NoLogError('Não foi possível recuperar um log do datalake')
+
+def distribution(media,std,minimo,maximo,n):
+    dist = list(np.random.normal(media,std,n))
+    for i,valor in enumerate(dist):
+        if not (minimo <= valor <= maximo):
+            dist[i] = (random.random() * (maximo - minimo)) + minimo
+    return dist
