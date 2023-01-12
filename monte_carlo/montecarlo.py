@@ -35,7 +35,6 @@ inflacao = records.loc[[x.find('INFLACAO') != -1 for x in records['file_name']]]
 juros = records.loc[[x.find('JUROS') != -1 for x in records['file_name']]]
 cambio = records.loc[[x.find('CAMBIO') != -1 for x in records['file_name']]]
 
-
 try:
     inflacao_name = inflacao.values.ravel()[-1]
     multithread.ADLDownloader(adlsFileSystemClient, lpath=inflacao_name, 
@@ -82,7 +81,7 @@ def simulate_inflacao(mes,ano):
 
 def simulate_juros(mes,ano):
     data = f'{ano}-{mes}'
-    linha = df_juros.loc[df_inflacao['date'] == data]
+    linha = df_juros.loc[df_juros['date'] == data]
     media = linha['prediction'].iloc[0]
     maximo = linha['superior'].iloc[0]
     minimo = linha['inferior'].iloc[0]
@@ -92,7 +91,7 @@ def simulate_juros(mes,ano):
 
 def simulate_cambio(mes,ano):
     data = f'{ano}-{mes}'
-    linha = df_cambio.loc[df_inflacao['date'] == data]
+    linha = df_cambio.loc[df_cambio['date'] == data]
     media = linha['prediction'].iloc[0]
     maximo = linha['superior'].iloc[0]
     minimo = linha['inferior'].iloc[0]

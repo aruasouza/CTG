@@ -139,7 +139,8 @@ def get_indicators_cambio(start_date):
     dataframe = dataframe.fillna(method = 'ffill')
     dataframe = dataframe.resample('m').mean()
     return dataframe.iloc[:-2]
-
+    
+# Função para realizar a captura de dados para cálculo da taxa Selic
 def get_indicators_selic(start_date):
     dados = {'selic':432,'IPCA_change':433,'pib':1208}
     try:
