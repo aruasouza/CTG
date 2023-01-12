@@ -45,11 +45,10 @@ except FileNotFoundError:
     multithread.ADLUploader(adlsFileSystemClient, lpath='records.csv',
         rpath=f'DataLakeRiscoECompliance/LOG/records.csv', nthreads=64, overwrite=True, buffersize=4194304, blocksize=4194304)
 
-def upload_file_to_directory(file_name,directory):
-    multithread.ADLUploader(adlsFileSystemClient, lpath=file_name,
+def upload_file_to_directory(local_path,directory,file_name):
+    multithread.ADLUploader(adlsFileSystemClient, lpath=local_path,
         rpath=f'{directory}/{file_name}', nthreads=64, overwrite=True, buffersize=4194304, blocksize=4194304)
     time.sleep(1)
-    os.remove('output/' + file_name)
 
 # Capturando o caminho do arquivo csv
 def captura_arquivo():
@@ -74,7 +73,6 @@ def captura_arquivo():
     Risco = var.get()
     print("Escolha o arquivo para upload")
     file_path = filedialog.askopenfilename()
-    root.withdraw()
     # Capturando o arquivo e renomeando para o padrão
     try:
         output = pd.read_csv(file_path)
@@ -95,7 +93,7 @@ def captura_arquivo():
     time_str = str(time).replace('.','-').replace(':','-').replace(' ','-')
     file_name = f'{Risco}_{time_str}.csv'
     # Colocando o output para csv e encaminhando-o para o data lake
-    upload_file_to_directory(file_path,f'DataLakeRiscoECompliance/PrevisionData/Variables/{Risco}/Manual')
+    upload_file_to_directory(file_path,f'DataLakeRiscoECompliance/PrevisionData/Variables/{Risco}/Manual',file_name)
     log = pd.read_csv(logfile_name)
     log = pd.concat([log,pd.DataFrame({'time':[time],'output':[file_name],'error':['no errors']})])
     log.to_csv(logfile_name,index = False)

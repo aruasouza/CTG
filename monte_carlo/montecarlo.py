@@ -58,7 +58,7 @@ except IndexError:
 
 try:
     cambio_name = cambio['file_name'].values[-1]
-    origin = juros['origin'].values[-1]
+    origin = cambio['origin'].values[-1]
     multithread.ADLDownloader(adlsFileSystemClient, lpath=cambio_name, 
         rpath=f'DataLakeRiscoECompliance/PrevisionData/Variables/CAMBIO/{origin}/{cambio_name}', nthreads=64, 
         overwrite=True, buffersize=4194304, blocksize=4194304)
