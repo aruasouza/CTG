@@ -54,3 +54,6 @@ time,output,error
 2023-01-12 13:13:14.625105,INFLACAO_2023-01-12-13-13-14-625105.csv,no errors
 2023-01-12 13:14:35.024690,CAMBIO_2023-01-12-13-14-35-024690.csv,no errors
 2023-01-12 13:22:50.390594,JUROS_2023-01-12-13-22-50-390594.csv,no errors
+2023-01-12 13:58:19.406482,erro,"OSError(""Cannot save file into a non-existent directory: 'output'"")"
+2023-01-12 13:59:54.662170,CAMBIO_2023-01-12-13-59-54-662170.csv,no errors
+2023-01-12 14:02:04.747642,CAMBIO_2023-01-12-14-02-04-747642.csv,no errors

@@ -70,7 +70,6 @@ def captura_arquivo():
     option3 = tk.Radiobutton(root, text="JUROS", variable=var, value="JUROS",command = on_select)
     option3.pack()
     root.mainloop()
-    root.withdraw()
     Risco = var.get()
     print("Escolha o arquivo para upload")
     file_path = filedialog.askopenfilename()
@@ -79,6 +78,7 @@ def captura_arquivo():
     time = datetime.now()
     time_str = str(time).replace('.','-').replace(':','-').replace(' ','-')
     file_name = f'{Risco}_{time_str}.csv'
+    root.withdraw()
     # Colocando o output para csv e encaminhando-o para o data lake
     output.to_csv('output/' + file_name)
     upload_file_to_directory(file_name,f'DataLakeRiscoECompliance/PrevisionData/Variables/{Risco}/Manual')
