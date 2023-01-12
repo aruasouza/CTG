@@ -21,7 +21,6 @@ adlCreds = lib.auth(tenant_id = tenant,
 
 adlsFileSystemClient = core.AzureDLFileSystem(adlCreds, store_name=adlsAccountName)
 
-# Pega o log do azure e sobescreve com novas saídas do log
 def get_log(mes,ano):
     logfile_name = f'log_{mes}_{ano}.csv'
     try:

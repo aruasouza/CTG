@@ -41,6 +41,16 @@ except FileNotFoundError:
     multithread.ADLUploader(adlsFileSystemClient, lpath=logfile_name,
         rpath=f'DataLakeRiscoECompliance/LOG/{logfile_name}', nthreads=64, overwrite=True, buffersize=4194304, blocksize=4194304)
 
+try:
+    multithread.ADLDownloader(adlsFileSystemClient, lpath='records.csv', 
+        rpath=f'DataLakeRiscoECompliance/LOG/records.csv', nthreads=64, 
+        overwrite=True, buffersize=4194304, blocksize=4194304)
+
+except FileNotFoundError:
+    pd.DataFrame({'file_name':[]}).to_csv('records.csv',index = False)
+    multithread.ADLUploader(adlsFileSystemClient, lpath='records.csv',
+        rpath=f'DataLakeRiscoECompliance/LOG/records.csv', nthreads=64, overwrite=True, buffersize=4194304, blocksize=4194304)
+
 logging.debug('This message is a test')
 logging.warning("If you see this message the warnning system is working")
 
@@ -60,8 +70,13 @@ def success(name,output):
     log = pd.read_csv(logfile_name)
     log = pd.concat([log,pd.DataFrame({'time':[time],'output':[file_name],'error':['no errors']})])
     log.to_csv(logfile_name,index = False)
+    records = pd.read_csv('records.csv')
+    records = pd.concat([records,pd.DataFrame({'file_name':[file_name]})])
+    records.to_csv('records.csv',index = False)
     multithread.ADLUploader(adlsFileSystemClient, lpath=logfile_name,
         rpath=f'DataLakeRiscoECompliance/LOG/{logfile_name}', nthreads=64, overwrite=True, buffersize=4194304, blocksize=4194304)
+    multithread.ADLUploader(adlsFileSystemClient, lpath='records.csv',
+        rpath=f'DataLakeRiscoECompliance/LOG/records.csv', nthreads=64, overwrite=True, buffersize=4194304, blocksize=4194304)
 
 def upload_file_to_directory(file_name,directory):
     multithread.ADLUploader(adlsFileSystemClient, lpath='output/' + file_name,
