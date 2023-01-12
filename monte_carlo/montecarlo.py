@@ -21,16 +21,7 @@ adlCreds = lib.auth(tenant_id = tenant,
 
 adlsFileSystemClient = core.AzureDLFileSystem(adlCreds, store_name=adlsAccountName)
 
-def get_log(mes,ano):
-    logfile_name = f'log_{mes}_{ano}.csv'
-    try:
-        multithread.ADLDownloader(adlsFileSystemClient, lpath=logfile_name, 
-        rpath=f'DataLakeRiscoECompliance/LOG/{logfile_name}', nthreads=64, 
-        overwrite=True, buffersize=4194304, blocksize=4194304)
-        log = pd.read_csv(logfile_name)
-        files_list = log.loc[log['error'] == 'no errors']
-    except FileNotFoundError:
-        raise NoLogError('Não foi possível recuperar um log do datalake')
+
 
 def distribution(media,std,minimo,maximo,n):
     dist = list(np.random.normal(media,std,n))
