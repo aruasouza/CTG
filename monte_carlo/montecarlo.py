@@ -35,9 +35,10 @@ juros = records.loc[[x.find('JUROS') != -1 for x in records['file_name']]]
 cambio = records.loc[[x.find('CAMBIO') != -1 for x in records['file_name']]]
 
 try:
-    inflacao_name = inflacao.values.ravel()[-1]
+    inflacao_name = inflacao['file_name'].values[-1]
+    origin = inflacao['origin'].values[-1]
     multithread.ADLDownloader(adlsFileSystemClient, lpath=inflacao_name, 
-        rpath=f'DataLakeRiscoECompliance/PrevisionData/Variables/INFLACAO/AI/{inflacao_name}', nthreads=64, 
+        rpath=f'DataLakeRiscoECompliance/PrevisionData/Variables/INFLACAO/{origin}/{inflacao_name}', nthreads=64, 
         overwrite=True, buffersize=4194304, blocksize=4194304)
     df_inflacao = pd.read_csv(inflacao_name)
     os.remove(inflacao_name)
@@ -45,9 +46,10 @@ except IndexError:
     print('Não existem simulações de inflação')
 
 try:
-    juros_name = juros.values.ravel()[-1]
+    juros_name = juros['file_name'].values[-1]
+    origin = juros['origin'].values[-1]
     multithread.ADLDownloader(adlsFileSystemClient, lpath=juros_name, 
-        rpath=f'DataLakeRiscoECompliance/PrevisionData/Variables/JUROS/AI/{juros_name}', nthreads=64, 
+        rpath=f'DataLakeRiscoECompliance/PrevisionData/Variables/JUROS/{origin}/{juros_name}', nthreads=64, 
         overwrite=True, buffersize=4194304, blocksize=4194304)
     df_juros = pd.read_csv(juros_name)
     os.remove(juros_name)
@@ -55,9 +57,10 @@ except IndexError:
     print('Não existem simulações de juros')
 
 try:
-    cambio_name = cambio.values.ravel()[-1]
+    cambio_name = cambio['file_name'].values[-1]
+    origin = juros['origin'].values[-1]
     multithread.ADLDownloader(adlsFileSystemClient, lpath=cambio_name, 
-        rpath=f'DataLakeRiscoECompliance/PrevisionData/Variables/CAMBIO/AI/{cambio_name}', nthreads=64, 
+        rpath=f'DataLakeRiscoECompliance/PrevisionData/Variables/CAMBIO/{origin}/{cambio_name}', nthreads=64, 
         overwrite=True, buffersize=4194304, blocksize=4194304)
     df_cambio = pd.read_csv(cambio_name)
     os.remove(cambio_name)

@@ -47,7 +47,7 @@ try:
         overwrite=True, buffersize=4194304, blocksize=4194304)
 
 except FileNotFoundError:
-    pd.DataFrame({'file_name':[]}).to_csv('records.csv',index = False)
+    pd.DataFrame({'file_name':[],'origin':[]}).to_csv('records.csv',index = False)
     multithread.ADLUploader(adlsFileSystemClient, lpath='records.csv',
         rpath=f'DataLakeRiscoECompliance/LOG/records.csv', nthreads=64, overwrite=True, buffersize=4194304, blocksize=4194304)
 
@@ -71,7 +71,7 @@ def success(name,output):
     log = pd.concat([log,pd.DataFrame({'time':[time],'output':[file_name],'error':['no errors']})])
     log.to_csv(logfile_name,index = False)
     records = pd.read_csv('records.csv')
-    records = pd.concat([records,pd.DataFrame({'file_name':[file_name]})])
+    records = pd.concat([records,pd.DataFrame({'file_name':[file_name],'origin':'AI'})])
     records.to_csv('records.csv',index = False)
     multithread.ADLUploader(adlsFileSystemClient, lpath=logfile_name,
         rpath=f'DataLakeRiscoECompliance/LOG/{logfile_name}', nthreads=64, overwrite=True, buffersize=4194304, blocksize=4194304)
