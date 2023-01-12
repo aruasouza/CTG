@@ -5,6 +5,7 @@ import pandas as pd
 from datetime import datetime
 import time
 import os
+import re
 
 # Talvez tenha bugado porque não tem tkinter
 
@@ -45,7 +46,7 @@ except FileNotFoundError:
         rpath=f'DataLakeRiscoECompliance/LOG/records.csv', nthreads=64, overwrite=True, buffersize=4194304, blocksize=4194304)
 
 def upload_file_to_directory(file_name,directory):
-    multithread.ADLUploader(adlsFileSystemClient, lpath='output/' + file_name,
+    multithread.ADLUploader(adlsFileSystemClient, lpath=file_name,
         rpath=f'{directory}/{file_name}', nthreads=64, overwrite=True, buffersize=4194304, blocksize=4194304)
     time.sleep(1)
     os.remove('output/' + file_name)
@@ -73,18 +74,28 @@ def captura_arquivo():
     Risco = var.get()
     print("Escolha o arquivo para upload")
     file_path = filedialog.askopenfilename()
+    root.withdraw()
     # Capturando o arquivo e renomeando para o padrão
     try:
         output = pd.read_csv(file_path)
-        time = datetime.now()
-        time_str = str(time).replace('.','-').replace(':','-').replace(' ','-')
-        file_name = f'{Risco}_{time_str}.csv'
-    except TypeError as e:
-        return e
-    root.withdraw()
+    except Exception:
+        print('O arquivo selecionado não é do formato correto.')
+        return
+    if len(output) > 72:
+        print('O tamanho do arquivo excede o limite máximo')
+        return
+    if list(output.columns) != ['date', 'prediction', 'superior', 'inferior', 'std']:
+        print('As colunas do arquivo devem ser (nessa ordem): date, prediction, superior, inferior, std')
+        return
+    date_sample = output.loc[0,'date'] 
+    if not re.match("^\d{4}-\d{2}$", date_sample):
+        print('As datas não estão no formato correto (YYYY-mm). Exemplo: 2020-04')
+        return
+    time = datetime.now()
+    time_str = str(time).replace('.','-').replace(':','-').replace(' ','-')
+    file_name = f'{Risco}_{time_str}.csv'
     # Colocando o output para csv e encaminhando-o para o data lake
-    output.to_csv('output/' + file_name)
-    upload_file_to_directory(file_name,f'DataLakeRiscoECompliance/PrevisionData/Variables/{Risco}/Manual')
+    upload_file_to_directory(file_path,f'DataLakeRiscoECompliance/PrevisionData/Variables/{Risco}/Manual')
     log = pd.read_csv(logfile_name)
     log = pd.concat([log,pd.DataFrame({'time':[time],'output':[file_name],'error':['no errors']})])
     log.to_csv(logfile_name,index = False)
