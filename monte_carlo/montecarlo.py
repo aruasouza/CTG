@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 import random
+import os
 from azure.datalake.store import core, lib, multithread
 
 class NoRecordsError(Exception):
@@ -39,6 +40,7 @@ try:
         rpath=f'DataLakeRiscoECompliance/PrevisionData/Variables/INFLACAO/AI/{inflacao_name}', nthreads=64, 
         overwrite=True, buffersize=4194304, blocksize=4194304)
     df_inflacao = pd.read_csv(inflacao_name)
+    os.remove(inflacao_name)
 except IndexError:
     print('Não existem simulações de inflação')
 
@@ -48,6 +50,7 @@ try:
         rpath=f'DataLakeRiscoECompliance/PrevisionData/Variables/JUROS/AI/{juros_name}', nthreads=64, 
         overwrite=True, buffersize=4194304, blocksize=4194304)
     df_juros = pd.read_csv(juros_name)
+    os.remove(juros_name)
 except IndexError:
     print('Não existem simulações de juros')
 
@@ -57,6 +60,7 @@ try:
         rpath=f'DataLakeRiscoECompliance/PrevisionData/Variables/CAMBIO/AI/{cambio_name}', nthreads=64, 
         overwrite=True, buffersize=4194304, blocksize=4194304)
     df_cambio = pd.read_csv(cambio_name)
+    os.remove(cambio_name)
 except IndexError:
     print('Não existem simulações de câmbio')
 

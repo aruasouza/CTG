@@ -1,3 +1,0 @@
-time,output,error
-2022-12-21 11:20:10.537432,erro,TimeoutError('Erro de conexão com o Banco Central')
-2022-12-21 11:22:01.753346,INFLACAO_2022-12-21-11-22-01-753346.csv,no errors
