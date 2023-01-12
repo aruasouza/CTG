@@ -74,7 +74,7 @@ def captura_arquivo():
     print("Escolha o arquivo para upload")
     root = tk.Tk()
     file_path = filedialog.askopenfilename()
-    root.withdraw()
+    root.destroy()
     # Capturando o arquivo e renomeando para o padrão
     try:
         output = pd.read_csv(file_path)
