@@ -21,6 +21,7 @@ adlCreds = lib.auth(tenant_id = tenant,
 
 adlsFileSystemClient = core.AzureDLFileSystem(adlCreds, store_name=adlsAccountName)
 
+# Pega o log do azure e sobescreve com novas saídas do log
 def get_log(mes,ano):
     logfile_name = f'log_{mes}_{ano}.csv'
     try:
@@ -32,6 +33,7 @@ def get_log(mes,ano):
     except FileNotFoundError:
         raise NoLogError('Não foi possível recuperar um log do datalake')
 
+# Cria a simulação de monte carlo com base em uma distribuição normal
 def distribution(media,std,minimo,maximo,n):
     dist = list(np.random.normal(media,std,n))
     for i,valor in enumerate(dist):
