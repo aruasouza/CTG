@@ -74,10 +74,13 @@ def captura_arquivo():
     print("Escolha o arquivo para upload")
     file_path = filedialog.askopenfilename()
     # Capturando o arquivo e renomeando para o padrão
-    output = pd.read_csv(file_path)
-    time = datetime.now()
-    time_str = str(time).replace('.','-').replace(':','-').replace(' ','-')
-    file_name = f'{Risco}_{time_str}.csv'
+    try:
+        output = pd.read_csv(file_path)
+        time = datetime.now()
+        time_str = str(time).replace('.','-').replace(':','-').replace(' ','-')
+        file_name = f'{Risco}_{time_str}.csv'
+    except TypeError as e:
+        return e
     root.withdraw()
     # Colocando o output para csv e encaminhando-o para o data lake
     output.to_csv('output/' + file_name)
