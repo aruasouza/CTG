@@ -57,12 +57,17 @@ def captura_arquivo():
     # Escolha do arquivo dentro do computador
     root = tk.Tk()
     var = tk.StringVar()
-    # var.set("Option 1")  # set the default option
-    option1 = tk.Radiobutton(root, text="CAMBIO", variable=var, value="CAMBIO")
+
+    def on_select():
+        choice = var.get()
+        # do something with the choice
+        root.destroy()
+
+    option1 = tk.Radiobutton(root, text="CAMBIO", variable=var, value="CAMBIO",command = on_select)
     option1.pack()
-    option2 = tk.Radiobutton(root, text="INFLACAO", variable=var, value="INFLACAO")
+    option2 = tk.Radiobutton(root, text="INFLACAO", variable=var, value="INFLACAO",command = on_select)
     option2.pack()
-    option3 = tk.Radiobutton(root, text="JUROS", variable=var, value="JUROS")
+    option3 = tk.Radiobutton(root, text="JUROS", variable=var, value="JUROS",command = on_select)
     option3.pack()
     root.mainloop()
     root.withdraw()
