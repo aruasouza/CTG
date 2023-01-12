@@ -1,8 +1,6 @@
 import numpy as np
 import pandas as pd
 import random
-from datetime import datetime
-from dateutil.relativedelta import relativedelta
 from azure.datalake.store import core, lib, multithread
 
 class NoRecordsError(Exception):
