@@ -9,80 +9,8 @@ from scipy.optimize import curve_fit
 from darts import TimeSeries
 from darts.models import BlockRNNModel
 from darts.dataprocessing.transformers import Scaler
-import logging
-import os
-import time
-
-from azure.datalake.store import core, lib, multithread
-
-tenant = '6e2475ac-18e8-4a6c-9ce5-20cace3064fc'
-RESOURCE = 'https://datalake.azure.net/'
-client_id = "0ed95623-a6d8-473e-86a7-a01009d77232"
-client_secret = "NC~8Q~K~SRFfrd4yf9Ynk_YAaLwtxJST1k9S4b~O"
-adlsAccountName = 'deepenctg'
-
-adlCreds = lib.auth(tenant_id = tenant,
-                client_secret = client_secret,
-                client_id = client_id,
-                resource = RESOURCE)
-
-adlsFileSystemClient = core.AzureDLFileSystem(adlCreds, store_name=adlsAccountName)
-
-today = datetime.now()
-logfile_name = f'log_{today.month}_{today.year}.csv'
-
-try:
-    multithread.ADLDownloader(adlsFileSystemClient, lpath=logfile_name, 
-        rpath=f'DataLakeRiscoECompliance/LOG/{logfile_name}', nthreads=64, 
-        overwrite=True, buffersize=4194304, blocksize=4194304)
-
-except FileNotFoundError:
-    pd.DataFrame({'time':[],'output':[],'error':[]}).to_csv(logfile_name,index = False)
-    multithread.ADLUploader(adlsFileSystemClient, lpath=logfile_name,
-        rpath=f'DataLakeRiscoECompliance/LOG/{logfile_name}', nthreads=64, overwrite=True, buffersize=4194304, blocksize=4194304)
-
-try:
-    multithread.ADLDownloader(adlsFileSystemClient, lpath='records.csv', 
-        rpath=f'DataLakeRiscoECompliance/LOG/records.csv', nthreads=64, 
-        overwrite=True, buffersize=4194304, blocksize=4194304)
-
-except FileNotFoundError:
-    pd.DataFrame({'file_name':[],'origin':[]}).to_csv('records.csv',index = False)
-    multithread.ADLUploader(adlsFileSystemClient, lpath='records.csv',
-        rpath=f'DataLakeRiscoECompliance/LOG/records.csv', nthreads=64, overwrite=True, buffersize=4194304, blocksize=4194304)
-
-logging.debug('This message is a test')
-logging.warning("If you see this message the warnning system is working")
-
-# Função que devolve o error e concatena no arquivo de log
-def error(e):
-    log = pd.read_csv(logfile_name)
-    log = pd.concat([log,pd.DataFrame({'time':[datetime.now()],'output':['erro'],'error':[repr(e)]})])
-    log.to_csv(logfile_name,index = False)
-
-def success(name,output):
-    time = datetime.now()
-    time_str = str(time).replace('.','-').replace(':','-').replace(' ','-')
-    file_name = f'{name}_{time_str}.csv'
-    output.index.name = 'date'
-    output.to_csv('output/' + file_name)
-    upload_file_to_directory(file_name,f'DataLakeRiscoECompliance/PrevisionData/Variables/{name}/AI')
-    log = pd.read_csv(logfile_name)
-    log = pd.concat([log,pd.DataFrame({'time':[time],'output':[file_name],'error':['no errors']})])
-    log.to_csv(logfile_name,index = False)
-    records = pd.read_csv('records.csv')
-    records = pd.concat([records,pd.DataFrame({'file_name':[file_name],'origin':'AI'})])
-    records.to_csv('records.csv',index = False)
-    multithread.ADLUploader(adlsFileSystemClient, lpath=logfile_name,
-        rpath=f'DataLakeRiscoECompliance/LOG/{logfile_name}', nthreads=64, overwrite=True, buffersize=4194304, blocksize=4194304)
-    multithread.ADLUploader(adlsFileSystemClient, lpath='records.csv',
-        rpath=f'DataLakeRiscoECompliance/LOG/records.csv', nthreads=64, overwrite=True, buffersize=4194304, blocksize=4194304)
-
-def upload_file_to_directory(file_name,directory):
-    multithread.ADLUploader(adlsFileSystemClient, lpath='output/' + file_name,
-        rpath=f'{directory}/{file_name}', nthreads=64, overwrite=True, buffersize=4194304, blocksize=4194304)
-    time.sleep(1)
-    os.remove('output/' + file_name)
+from sklearn.linear_model import LinearRegression
+import math
 
 # Função que converte a variação mensal do IPCA em IPCA absoluto (A série de ipca deve começar em janeiro de 2000)
 def absolute(serie):
@@ -142,17 +70,13 @@ def get_indicators_cambio(start_date):
     
 # Função para realizar a captura de dados para cálculo da taxa Selic
 def get_indicators_selic(start_date):
-    dados = {'selic':432,'IPCA_change':433,'pib':1208}
+    dados = {'selic':432}
     try:
         dataframe = sgs.get(dados,start = start_date)
     except:
         raise TimeoutError('Erro de conexão com o Banco Central')
-    dataframe = dataframe.fillna(method = 'ffill')
     dataframe = dataframe.resample('m').mean()
-    dataframe['indice'] = [valor for valor in absolute(dataframe['IPCA_change'].values)]
-    del(dataframe['IPCA_change'])
-    dataframe = dataframe.dropna()
-    return dataframe.iloc[:-2]
+    return dataframe
 
 # Classe utilizada para criar o modelo LSTM (IPCA)
 class LSTM:
@@ -190,6 +114,26 @@ def simple_square(x,a):
 
 def square(x,a,b,c):
     return ((x ** 2) * a) + (x * b) + c
+
+def linear(x,a,b):
+    return (x * a) + b
+
+def sigmoid(x):
+    return 1 / (1 + math.exp(-x))
+
+def weight(points,expo):
+    def ajust(i):
+        return sigmoid(i/points) ** expo
+    return ajust
+
+def simple_model_predict(serie,projection_points):
+    values = serie.values
+    last_dif = values[-1] - values[-2]
+    line = LinearRegression().fit(np.arange(len(values)).reshape(-1,1),values).predict(np.arange(len(values),len(values) + projection_points).reshape(-1,1)) - values[-1]
+    line_derivada = np.cumsum(np.array([last_dif] * projection_points))
+    ajuster = weight(10,10)
+    final = [(line_derivada[i] * (1 - ajuster(i))) + (line[i] * ajuster(i)) for i in range(projection_points)]
+    return final + values[-1]
 
 # Classe utilizada para criar o modelo de regressão + LSTM para o câmbio
 class RegressionPlusLSTM:
@@ -251,10 +195,10 @@ def predict_ipca(test = False,lags = None):
         pred_df['inferior'] = [pred - (pred * res_max) for pred in prediction]
         pred_df['std'] = std
         # Salvando no Log
-        success('INFLACAO',pred_df)
+        # success('INFLACAO',pred_df)
         return pred_df
     except Exception as e:
-        error(e)
+        # error(e)
         return e
 
 def predict_cambio(test = False,lags = None):
@@ -290,47 +234,50 @@ def predict_cambio(test = False,lags = None):
         pred_df['inferior'] = [pred - (pred * res_max) for pred in prediction]
         pred_df['std'] = std
         # Salvando no Log
-        success('CAMBIO',pred_df)
+        # success('CAMBIO',pred_df)
         return pred_df
     except Exception as e:
-        error(e)
+        # error(e)
         return e
 
 def predict_selic(test = False,lags = None):
+    global run_status
     try:
         # Puxando e plotando os dados de IPCA
         df = get_indicators_selic('2000-01-01')
-        selic = df[['selic']].copy()
-        df = df.drop(['selic'],axis = 1)
+        selic = df['selic']
         # Treinando o modelo de SELIC
         if not test:
             lags = [5]
         results = {}
         for anos in lags:
-            x_train,y_train = train_test_split(df,selic,anos)
-            model = RegressionPlusLSTM(y_train,x_train,square).fit(60,12 * anos)
+            y_train = selic.iloc[:-12 * anos]
             # Calculando o Erro
-            prediction = model.predict(12 * anos,0.8)
-            pred_df = selic.copy()
+            prediction = simple_model_predict(y_train,12 * anos)
+            pred_df = df.copy()
             pred_df['prediction'] = [None for _ in range(len(pred_df) - len(prediction))] + list(prediction)
             results[anos] = pred_df
         if test:
             return results
         pred_df['res'] = (pred_df['selic'] - pred_df['prediction']).apply(abs)
         pred = pred_df.dropna()
-        std = mean_squared_error(pred['selic'],pred['prediction'],squared = False)
+        std = math.sqrt(np.square(np.subtract(pred['selic'].values,pred['prediction'].values)).mean())
         res_max = pred['res'].max()
         # Treinando novamente o modelo e calculando o Forecast
-        model = RegressionPlusLSTM(selic,df,square).fit(60,12 * anos)
-        prediction = model.predict(12 * anos,0.2)
+        prediction = simple_model_predict(selic,12 * anos)
         pred_df = pd.DataFrame({'prediction':prediction},
             index = pd.period_range(start = selic.index[-1] + relativedelta(months = 1),periods = len(prediction),freq = 'M'))
         pred_df['superior'] = [pred + res_max for pred in prediction]
         pred_df['inferior'] = [pred - res_max for pred in prediction]
         pred_df['std'] = std
         # Salvando no Log
-        success('JUROS',pred_df)
-        return pred_df
+        plot_df = pd.DataFrame({'prediction':pred_df['prediction'].values},
+            index = pd.date_range(start = selic.index[-1] + relativedelta(months = 1),periods = len(prediction),freq = 'M'))
+        global data_for_plotting
+        data_for_plotting = pd.concat([selic.copy(),plot_df])
+        run_status = 'O forecast foi gerado e enviado com sucesso para a nuvem'
     except Exception as e:
-        error(e)
-        return e
+        run_status = e
+
+def predict_energy_production():
+    pass
