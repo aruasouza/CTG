@@ -210,7 +210,7 @@ def predict_cambio(test = False,lags = None):
     results = {}
     for anos in lags:
         x_train,y_train = train_test_split(df,cambio,anos)
-        model = RegressionPlusLSTM(y_train,x_train,simple_square).fit(36,12 * anos)
+        model = RegressionPlusLSTM(y_train,x_train,square).fit(36,12 * anos)
         # Calculando o Erro
         prediction = model.predict(12 * anos,0.6)
         pred_df = cambio.copy()
@@ -223,7 +223,7 @@ def predict_cambio(test = False,lags = None):
     std = mean_squared_error(pred['cambio'],pred['prediction'],squared = False)
     res_max = pred['res'].max()
     # Treinando novamente o modelo e calculando o Forecast
-    model = RegressionPlusLSTM(cambio,df,simple_square).fit(36,12 * anos)
+    model = RegressionPlusLSTM(cambio,df,square).fit(36,12 * anos)
     prediction = model.predict(12 * anos,0.6)
     pred_df = pd.DataFrame({'prediction':prediction},
         index = pd.period_range(start = cambio.index[-1] + relativedelta(months = 1),periods = len(prediction),freq = 'M'))
@@ -270,7 +270,7 @@ def predict_energy_production(test = False,lags = None):
     results = {}
     for anos in lags:
         y_train = df.iloc[:-12 * anos]
-        model = LSTM(y_train[['hydroeletric']],y_train.drop(['hydroeletric'],axis = 1)).fit(24,12 * anos)
+        model = LSTM(y_train[['hydroeletric']],y_train.drop(['hydroeletric'],axis = 1)).fit(12,12 * anos)
         prediction = model.predict(12 * anos)
         pred_df = df[['hydroeletric']].copy()
         pred_df['prediction'] = [None for _ in range(len(pred_df) - len(prediction))] + list(prediction)
@@ -282,7 +282,7 @@ def predict_energy_production(test = False,lags = None):
     std = math.sqrt(np.square(pred['indice'].values - pred['prediction'].values).sum())
     res_max = pred['res'].max()
     # Treinando novamente o modelo e calculando o Forecast
-    model = LSTM(df[['hydroeletric']],df.drop(['hydroeletric'],axis = 1)).fit(24,12 * anos)
+    model = LSTM(df[['hydroeletric']],df.drop(['hydroeletric'],axis = 1)).fit(12,12 * anos)
     prediction = model.predict(12 * anos)
     pred_df = pd.DataFrame({'prediction':prediction},
         index = pd.period_range(start = df.index[-1] + relativedelta(months = 1),periods = len(prediction),freq = 'M'))
