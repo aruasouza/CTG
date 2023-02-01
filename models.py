@@ -12,6 +12,7 @@ from darts.dataprocessing.transformers import Scaler
 from sklearn.linear_model import LinearRegression
 import math
 from retry import retry
+from sklearn.ensemble import RandomForestRegressor
 
 # Função que converte a variação mensal do IPCA em IPCA absoluto (A série de ipca deve começar em janeiro de 2000)
 def absolute(serie):
@@ -165,6 +166,27 @@ class RegressionPlusLSTM:
         prediction_final = np.array([prediction_final[i] + (micro_diferenca * (1 - (i / (len(prediction_final) - 1)))) for i in range(len(prediction_final))])
         return prediction_final
 
+class randomForestmodel:
+    def __init__(self,train):
+        train = train.copy()
+        self.last = train.values.ravel()[-1]
+        self.start_date = train.index[-1] + relativedelta(months = 1)
+        # train = train.diff().dropna()
+        train['mes'] = train.index.month
+        train['quarter'] = train.index.quarter
+        train['ano'] = train.index.year
+        x_values = train[['mes','quarter','ano']].values
+        y_train = train.drop(['mes','quarter','ano'],axis = 1).values.ravel()
+        self.model = RandomForestRegressor(max_depth=100, random_state=0).fit(x_values,y_train)
+    def predict(self,n):
+        datas = pd.date_range(start = self.start_date,periods = n,freq = 'm')
+        x_df = pd.DataFrame(index = datas)
+        x_df['mes'] = x_df.index.month
+        x_df['quarter'] = x_df.index.quarter
+        x_df['ano'] = x_df.index.year
+        x_values = x_df.values
+        return self.model.predict(x_values)
+
 # Função que prevê o IPCA
 def predict_ipca(test = False,lags = None):
     # Obtendo os dados
@@ -270,23 +292,22 @@ def predict_energy_production(test = False,lags = None):
     results = {}
     for anos in lags:
         y_train = df.iloc[:-12 * anos]
-        model = LSTM(y_train[['hydroeletric']],y_train.drop(['hydroeletric'],axis = 1)).fit(12,12 * anos)
+        model = randomForestmodel(y_train[['hydroeletric']])
         prediction = model.predict(12 * anos)
         pred_df = df[['hydroeletric']].copy()
         pred_df['prediction'] = [None for _ in range(len(pred_df) - len(prediction))] + list(prediction)
         results[anos] = pred_df
     if test:
         return results
-    pred_df['res'] = ((pred_df['hydroeletric'] - pred_df['prediction']) / pred_df['indice']).apply(abs)
+    pred_df['res'] = ((pred_df['hydroeletric'] - pred_df['prediction']) / pred_df['hydroeletric']).apply(abs)
     pred = pred_df.dropna()
-    std = math.sqrt(np.square(pred['indice'].values - pred['prediction'].values).sum())
+    std = math.sqrt(np.square(pred['hydroeletric'].values - pred['prediction'].values).sum())
     res_max = pred['res'].max()
     # Treinando novamente o modelo e calculando o Forecast
-    model = LSTM(df[['hydroeletric']],df.drop(['hydroeletric'],axis = 1)).fit(12,12 * anos)
+    model = randomForestmodel(df[['hydroeletric']])
     prediction = model.predict(12 * anos)
     pred_df = pd.DataFrame({'prediction':prediction},
         index = pd.period_range(start = df.index[-1] + relativedelta(months = 1),periods = len(prediction),freq = 'M'))
     pred_df['superior'] = [pred + (pred * res_max) for pred in prediction]
     pred_df['inferior'] = [pred - (pred * res_max) for pred in prediction]
     pred_df['std'] = std
-    return pred_df
