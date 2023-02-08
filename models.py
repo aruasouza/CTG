@@ -13,6 +13,7 @@ from sklearn.linear_model import LinearRegression
 import math
 from retry import retry
 from sklearn.ensemble import RandomForestRegressor
+from bcb import Expectativas
 
 # Função que converte a variação mensal do IPCA em IPCA absoluto (A série de ipca deve começar em janeiro de 2000)
 def absolute(serie):
@@ -47,7 +48,7 @@ def train_test_split(xdata,ydata,horizonte):
 # Função que puxa os dados usados pra prever o câmbio
 @retry(TimeoutError,tries = 5,delay = 1)
 def get_indicators_cambio(start_date):
-    dados = {'selic':432,'emprego':28763,'ipca':13522,'pib':1208}
+    dados = {'selic':432,'ipca':13522,'pib':1208,'emprego':28763}
     try:
         dataframe = sgs.get(dados,start = start_date)
     except:
@@ -75,13 +76,13 @@ def get_indicators_cambio(start_date):
 # Função para realizar a captura de dados para cálculo da taxa Selic
 @retry(TimeoutError,tries = 5,delay = 1)
 def get_indicators_selic(start_date):
-    dados = {'selic':432}
+    dados = {'selic':4391}
     try:
         dataframe = sgs.get(dados,start = start_date)
     except:
         raise TimeoutError('Erro de conexão com o Banco Central')
     dataframe = dataframe.resample('m').mean()
-    return dataframe
+    return dataframe.iloc[:-1]
 
 # Classe utilizada para criar o modelo LSTM (IPCA)
 class LSTM:
@@ -132,13 +133,27 @@ def weight(points,expo):
     return ajust
 
 def simple_model_predict(serie,projection_points):
-    values = serie.values
+    ma = serie.rolling(6).mean().dropna()
+    values = ma.values
     last_dif = values[-1] - values[-2]
     line = LinearRegression().fit(np.arange(len(values)).reshape(-1,1),values).predict(np.arange(len(values),len(values) + projection_points).reshape(-1,1)) - values[-1]
     line_derivada = np.cumsum(np.array([last_dif] * projection_points))
     ajuster = weight(10,10)
     final = [(line_derivada[i] * (1 - ajuster(i))) + (line[i] * ajuster(i)) for i in range(projection_points)]
-    return final + values[-1]
+    prediction = final + values[-1]
+    micro_diferenca = serie.values[-1] - prediction[0]
+    prediction_final = np.array([prediction[i] + (micro_diferenca * (1 - (i / (len(prediction) - 1)))) for i in range(len(prediction))])
+    return prediction_final
+
+def get_expectations(anos = 0):
+    data_inicial = str(datetime.today() - relativedelta(months = (1 + (anos * 12))))[:10]
+    data_final = str(datetime.today() - relativedelta(months = (anos * 12)))[:10]
+    em = Expectativas()
+    ep = em.get_endpoint('ExpectativasMercadoTop5Anuais')
+    ultima_data = ep.query().filter(ep.Indicador == 'Câmbio',ep.Data >= data_inicial,ep.Data <= data_final,ep.tipoCalculo == 'L').select(ep.Data).collect()['Data'].iloc[-1]
+    df = ep.query().filter(ep.Indicador == 'Câmbio',ep.Data == ultima_data,ep.tipoCalculo == 'L').select(ep.DataReferencia,ep.Media).collect()
+    df['DataReferencia'] = df['DataReferencia'].apply(int)
+    return df.set_index('DataReferencia').rename({'Media':'expect'},axis = 1)
 
 # Classe utilizada para criar o modelo de regressão + LSTM para o câmbio
 class RegressionPlusLSTM:
@@ -166,27 +181,6 @@ class RegressionPlusLSTM:
         prediction_final = np.array([prediction_final[i] + (micro_diferenca * (1 - (i / (len(prediction_final) - 1)))) for i in range(len(prediction_final))])
         return prediction_final
 
-class randomForestmodel:
-    def __init__(self,train):
-        train = train.copy()
-        self.last = train.values.ravel()[-1]
-        self.start_date = train.index[-1] + relativedelta(months = 1)
-        # train = train.diff().dropna()
-        train['mes'] = train.index.month
-        train['quarter'] = train.index.quarter
-        train['ano'] = train.index.year
-        x_values = train[['mes','quarter','ano']].values
-        y_train = train.drop(['mes','quarter','ano'],axis = 1).values.ravel()
-        self.model = RandomForestRegressor(max_depth=100, random_state=0).fit(x_values,y_train)
-    def predict(self,n):
-        datas = pd.date_range(start = self.start_date,periods = n,freq = 'm')
-        x_df = pd.DataFrame(index = datas)
-        x_df['mes'] = x_df.index.month
-        x_df['quarter'] = x_df.index.quarter
-        x_df['ano'] = x_df.index.year
-        x_values = x_df.values
-        return self.model.predict(x_values)
-
 # Função que prevê o IPCA
 def predict_ipca(test = False,lags = None):
     # Obtendo os dados
@@ -199,9 +193,9 @@ def predict_ipca(test = False,lags = None):
     results = {}
     for anos in lags:
         x_train,y_train = train_test_split(df,ipca,anos)
-        model = LSTM(y_train,x_train).fit(24,12 * anos)
+        model = RegressionPlusLSTM(y_train,x_train,square).fit(24,12 * anos)
         # Calculando o Erro
-        prediction = model.predict(12 * anos)
+        prediction = model.predict(12 * anos,0.5)
         pred_df = ipca.copy()
         pred_df['prediction'] = [None for _ in range(len(pred_df) - len(prediction))] + list(prediction)
         results[anos] = pred_df
@@ -212,8 +206,8 @@ def predict_ipca(test = False,lags = None):
     std = mean_squared_error(pred['indice'],pred['prediction'],squared = False)
     res_max = pred['res'].max()
     # Treinando novamente o modelo e calculando o Forecast
-    model = LSTM(ipca,df).fit(24,12 * anos)
-    prediction = model.predict(12 * anos)
+    model = RegressionPlusLSTM(ipca,df,square).fit(24,12 * anos)
+    prediction = model.predict(12 * anos,0.5)
     pred_df = pd.DataFrame({'prediction':prediction},
         index = pd.period_range(start = ipca.index[-1] + relativedelta(months = 1),periods = len(prediction),freq = 'M'))
     pred_df['superior'] = [pred + (pred * res_max) for pred in prediction]
@@ -222,6 +216,7 @@ def predict_ipca(test = False,lags = None):
     return pred_df
 
 def predict_cambio(test = False,lags = None):
+    regression_level = 0
     # Puxando os dados de câmbio
     df = get_indicators_cambio('2000-01-01')
     cambio = df[['cambio']].copy()
@@ -231,12 +226,16 @@ def predict_cambio(test = False,lags = None):
         lags = [5]
     results = {}
     for anos in lags:
+        expect = get_expectations(anos)
         x_train,y_train = train_test_split(df,cambio,anos)
-        model = RegressionPlusLSTM(y_train,x_train,square).fit(36,12 * anos)
+        model = LSTM(y_train,x_train).fit(84,12 * anos)
         # Calculando o Erro
-        prediction = model.predict(12 * anos,0.6)
+        prediction = model.predict(12 * anos)
+        prediction = pd.Series(prediction).rolling(6,1).mean()
         pred_df = cambio.copy()
-        pred_df['prediction'] = [None for _ in range(len(pred_df) - len(prediction))] + list(prediction)
+        pred_df['prediction'] = ([None] * (len(pred_df) - len(prediction))) + list(prediction)
+        pred_df['ano'] = pred_df.index.year
+        pred_df = pred_df.join(expect,on = 'ano')
         results[anos] = pred_df
     if test:
         return results
@@ -245,8 +244,8 @@ def predict_cambio(test = False,lags = None):
     std = mean_squared_error(pred['cambio'],pred['prediction'],squared = False)
     res_max = pred['res'].max()
     # Treinando novamente o modelo e calculando o Forecast
-    model = RegressionPlusLSTM(cambio,df,square).fit(36,12 * anos)
-    prediction = model.predict(12 * anos,0.6)
+    model = RegressionPlusLSTM(cambio,df,square).fit(72,12 * anos)
+    prediction = model.predict(12 * anos,regression_level)
     pred_df = pd.DataFrame({'prediction':prediction},
         index = pd.period_range(start = cambio.index[-1] + relativedelta(months = 1),periods = len(prediction),freq = 'M'))
     pred_df['superior'] = [pred + (pred * res_max) for pred in prediction]
@@ -284,30 +283,41 @@ def predict_selic(test = False,lags = None):
     pred_df['std'] = std
     return pred_df
 
-def predict_energy_production(test = False,lags = None):
-    df = pd.read_csv('daily_eletricity_generation_by_source_brazil.csv',index_col = 'date',parse_dates = True)
-    df = df.resample('m').sum()
+def predict_gsf(test = False,lags = None):
+    mapa_meses = {'jan':1,'fev':2,'mar':3,'abr':4,'mai':5,'jun':6,'jul':7,'ago':8,'set':9,'out':10,'nov':11,'dez':12}
+    new_names = {'Garantia física no centro de gravidade MW médios (GFIS_2p,j)':'Garantia Física',
+        'Geração no Centro de Gravidade - MW médios (Gp,j)':'Geração'}
+    df = pd.read_excel('MRE - Geração x Garantia Física - Mês.xlsx').set_index('Unnamed: 0').T.rename(new_names,axis = 1)
+    df.columns.name = None
+    df = df.reset_index()
+    df['index'] = pd.to_datetime(df['index'].apply(lambda x: str(mapa_meses[x[:3]]) + x[3] + '20' + x[4:]),format = '%m/%Y')
+    df = df.set_index('index')
+    df['gsf'] = df['Geração'] / df['Garantia Física']
+    gsf = df[['gsf']]
+    df = df.drop('gsf',axis = 1)
+    # Treinando o modelo de SELIC
     if not test:
-        lags = [5]
+        lags = [3]
     results = {}
     for anos in lags:
-        y_train = df.iloc[:-12 * anos]
-        model = randomForestmodel(y_train[['hydroeletric']])
+        x_train,y_train = train_test_split(df,gsf,anos)
+        model = LSTM(y_train,x_train).fit(24,12 * anos)
+        # Calculando o Erro
         prediction = model.predict(12 * anos)
-        pred_df = df[['hydroeletric']].copy()
+        pred_df = gsf.copy()
         pred_df['prediction'] = [None for _ in range(len(pred_df) - len(prediction))] + list(prediction)
         results[anos] = pred_df
     if test:
         return results
-    pred_df['res'] = ((pred_df['hydroeletric'] - pred_df['prediction']) / pred_df['hydroeletric']).apply(abs)
+    pred_df['res'] = (pred_df['gsf'] - pred_df['prediction']).apply(abs)
     pred = pred_df.dropna()
-    std = math.sqrt(np.square(pred['hydroeletric'].values - pred['prediction'].values).sum())
+    std = math.sqrt(np.square(np.subtract(pred['gsf'].values,pred['prediction'].values)).mean())
     res_max = pred['res'].max()
     # Treinando novamente o modelo e calculando o Forecast
-    model = randomForestmodel(df[['hydroeletric']])
+    model = LSTM(gsf,df).fit(24,12 * anos)
     prediction = model.predict(12 * anos)
     pred_df = pd.DataFrame({'prediction':prediction},
-        index = pd.period_range(start = df.index[-1] + relativedelta(months = 1),periods = len(prediction),freq = 'M'))
-    pred_df['superior'] = [pred + (pred * res_max) for pred in prediction]
-    pred_df['inferior'] = [pred - (pred * res_max) for pred in prediction]
+        index = pd.period_range(start = gsf.index[-1] + relativedelta(months = 1),periods = len(prediction),freq = 'M'))
+    pred_df['superior'] = [pred + res_max for pred in prediction]
+    pred_df['inferior'] = [pred - res_max for pred in prediction]
     pred_df['std'] = std
