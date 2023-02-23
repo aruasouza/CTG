@@ -14,6 +14,7 @@ import math
 from retry import retry
 from darts.models import NBEATSModel
 from bcb import Expectativas
+from sklearn.ensemble import RandomForestRegressor
 
 # Função que converte a variação mensal do IPCA em IPCA absoluto (A série de ipca deve começar em janeiro de 2000)
 def absolute(serie):
@@ -141,6 +142,25 @@ class LSTM:
         difference = converted_prediction[0] - self.last
         prediction_final = converted_prediction - difference
         return prediction_final
+
+class Forest:
+    def __init__(self,df):
+        df = df.copy()
+        self.last_date = df.index[-1]
+        df['mes'] = df.index.month
+        df['quarter'] = df.index.quarter
+        ger,gf = df['Geração'].values,df['Garantia Física'].values
+        x = df[['mes','quarter']].values
+        self.model_ger = RandomForestRegressor(max_depth=10).fit(x,ger)
+        self.model_gf = RandomForestRegressor(max_depth=10).fit(x,gf)
+    def predict(self,n):
+        date_range = pd.date_range(start = self.last_date + relativedelta(months = 1),periods = n,freq = 'MS')
+        df = pd.DataFrame(index = date_range)
+        df['mes'] = df.index.month
+        df['quarter'] = df.index.quarter
+        x_fut = df.values
+        df['prediction'] = self.model_ger.predict(x_fut) / self.model_gf.predict(x_fut)
+        return df['prediction'].values
 
 # Função otilizada para aproximar a curva de câmbio
 def simple_square(x,a):
@@ -329,8 +349,8 @@ def predict_gsf(test = False,lags = None):
         lags = [3]
     results = {}
     for anos in lags:
-        x_train,y_train = train_test_split(df,gsf,anos)
-        model = LSTM(y_train,x_train).fit(24,12 * anos)
+        y_train = df.iloc[:-anos * 12]
+        model = Forest(y_train)
         # Calculando o Erro
         prediction = model.predict(12 * anos)
         pred_df = gsf.copy()
@@ -343,7 +363,7 @@ def predict_gsf(test = False,lags = None):
     std = math.sqrt(np.square(np.subtract(pred['gsf'].values,pred['prediction'].values)).mean())
     res_max = pred['res'].max()
     # Treinando novamente o modelo e calculando o Forecast
-    model = LSTM(gsf,df).fit(24,12 * anos)
+    model = Forest(df)
     prediction = model.predict(12 * anos)
     pred_df = pd.DataFrame({'prediction':prediction},
         index = pd.period_range(start = gsf.index[-1] + relativedelta(months = 1),periods = len(prediction),freq = 'M'))
